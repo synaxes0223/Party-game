@@ -252,6 +252,18 @@ test("an eliminated player is excluded from audio and votes in the following rou
   assert.equal(loadEvents2.length, 3);
   assert.equal(loadEvents2.some((e) => e.id === victim), false);
 
+  // Drive round 2 into "playing" phase for real, so the vote below exercises
+  // onVote's actual activeIds.includes(socketId) guard rather than being
+  // rejected earlier by the phase check (which would pass for anyone).
+  readyAllActive(room, io2);
+  game.onHostPlay(room, io2);
+  assert.equal(room.gameState.phase, "playing");
+
   game.onVote(room, io2, victim, "skip");
   assert.equal(room.gameState.votes.has(victim), false);
+
+  // Positive control: a still-active player's vote in the same phase IS
+  // accepted, confirming voting was genuinely reachable here.
+  game.onVote(room, io2, voterB, "skip");
+  assert.equal(room.gameState.votes.has(voterB), true);
 });
