@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Party Game Platform — Host</title>
+<link rel="stylesheet" href="/host/style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <section id="screen-start" class="screen active">
+      <h1>🎉 Party Game Platform</h1>
+      <p class="subtitle">Host a room for your party</p>
+      <button id="btn-create-room" class="btn-primary">Create Room</button>
+    </section>
+
+    <section id="screen-lobby" class="screen">
+      <div class="room-code-box">
+        <span class="label">Room Code</span>
+        <span id="room-code" class="room-code">----</span>
+        <span id="join-url" class="join-url"></span>
+      </div>
+
+      <div class="players-panel">
+        <h2>Players (<span id="player-count">0</span>)</h2>
+        <ul id="player-list" class="player-list"></ul>
+        <p id="player-empty-hint" class="hint">Waiting for players to join…</p>
+      </div>
+
+      <div class="game-select-panel">
+        <h2>Choose a game</h2>
+        <div id="game-list" class="game-list"></div>
+      </div>
+
+      <button id="btn-start-game" class="btn-primary" disabled>Start Game</button>
+      <p id="lobby-error" class="error"></p>
+    </section>
+
+    <section id="screen-game" class="screen">
+      <h2 id="game-title-active"></h2>
+      <div id="game-progress" class="progress-box">
+        <p id="progress-text">Loading audio on all devices…</p>
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+      </div>
+    </section>
+
+    <section id="screen-results" class="screen">
+      <h2>Results</h2>
+      <p id="imposter-reveal" class="imposter-reveal"></p>
+      <ul id="results-list" class="results-list"></ul>
+      <button id="btn-play-again" class="btn-primary">Back to Lobby</button>
+    </section>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/host/host.js"></script>
+</body>
+</html>

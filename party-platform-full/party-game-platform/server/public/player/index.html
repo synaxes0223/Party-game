@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Join Party Game</title>
+<link rel="stylesheet" href="/player/style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <section id="screen-join" class="screen active">
+      <h1>🎉 Join the Party</h1>
+      <input id="input-code" class="input-field" placeholder="ROOM CODE" maxlength="4" autocapitalize="characters" />
+      <input id="input-nickname" class="input-field" placeholder="Your name" maxlength="20" />
+      <button id="btn-join" class="btn-primary">Join Room</button>
+      <p id="join-error" class="error"></p>
+    </section>
+
+    <section id="screen-waiting" class="screen">
+      <h1>You're in! 🙌</h1>
+      <p class="subtitle">Waiting for host to start the game…</p>
+      <div class="players-panel">
+        <h2>Players in room</h2>
+        <ul id="player-list" class="player-list"></ul>
+      </div>
+    </section>
+
+    <section id="screen-audio-ready" class="screen">
+      <h1>🎧 Put your earphones in</h1>
+      <p class="subtitle">Tap below when ready — audio will start for everyone at the same moment.</p>
+      <button id="btn-ready" class="btn-primary">I'm Ready</button>
+      <p id="ready-status" class="hint"></p>
+    </section>
+
+    <section id="screen-playing" class="screen">
+      <h1>🔊 Listen carefully…</h1>
+      <p class="subtitle">Take your earphones out once it's done, then vote below.</p>
+      <div id="vote-list" class="vote-list"></div>
+      <p id="vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-results" class="screen">
+      <h2>Results</h2>
+      <p id="imposter-reveal" class="imposter-reveal"></p>
+      <ul id="results-list" class="results-list"></ul>
+      <p class="hint">Waiting for host to start the next round…</p>
+    </section>
+
+  </div>
+
+  <audio id="audio-player" preload="auto"></audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/player/player.js"></script>
+</body>
+</html>

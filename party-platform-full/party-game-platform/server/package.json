@@ -1,0 +1,14 @@
+{
+  "name": "party-game-server",
+  "version": "0.1.0",
+  "description": "Party game platform - room/lobby shell + Find the Imposter audio game",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
