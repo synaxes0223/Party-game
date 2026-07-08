@@ -974,7 +974,7 @@ with:
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e-rounds.js"
   },
   "dependencies": {
@@ -1998,7 +1998,7 @@ git commit -m "Add player UI for vote confirm/skip, round results, and spectator
 
 - [ ] **Step 1: Run the unit test suite**
 
-Run: `node --test test/`
+Run: `node --test "test/*.test.js"` (the bare-directory form `node --test test/` fails with `MODULE_NOT_FOUND` on this Node v24.13.1/Windows setup — confirmed during Task 2 — always use the glob form)
 Expected: all tests from `imposterLogic.test.js` and `findTheImposter.test.js` pass (20 tests total), 0 failures.
 
 - [ ] **Step 2: Run the live E2E script**
