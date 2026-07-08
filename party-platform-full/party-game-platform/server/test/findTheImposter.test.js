@@ -217,3 +217,41 @@ test("onPlayerLeft removes a pending vote and lets the round resolve with one fe
   game.onVote(room, io, "p3", "skip");
   assert.equal(room.gameState.phase, "round-results");
 });
+
+test("an eliminated player is excluded from audio and votes in the following round", () => {
+  const room = makeRoom(["A", "B", "C", "D"]);
+  const { io, emitted } = makeStubIo();
+  game.onSelectTrackPair(room, io, "pair1");
+  readyAllActive(room, io);
+  game.onHostPlay(room, io);
+
+  const imposterId = room.gameState.imposterId;
+  const nonImposters = ["p1", "p2", "p3", "p4"].filter((id) => id !== imposterId);
+  const [victim, voterB, voterC] = nonImposters;
+
+  // 3 of 4 active players vote for victim -> meets the strict majority
+  // threshold (floor(4/2)+1 = 3) without dropping to the 2-player end state.
+  game.onVote(room, io, imposterId, victim);
+  game.onVote(room, io, voterB, victim);
+  game.onVote(room, io, voterC, victim);
+  game.onVote(room, io, victim, "skip");
+
+  assert.equal(room.gameState.phase, "round-results");
+  assert.ok(room.gameState.eliminated.has(victim));
+  assert.equal(room.gameState.eliminated.size, 1);
+
+  const nextRoundResult = game.onNextRound(room, io);
+  assert.deepEqual(nextRoundResult, {});
+  assert.equal(room.gameState.phase, "track-select");
+
+  const { io: io2, emitted: emitted2 } = makeStubIo();
+  game.onSelectTrackPair(room, io2, "pair1");
+  assert.equal(room.gameState.round, 2);
+
+  const loadEvents2 = emitted2.filter((e) => e.event === "game:load-audio");
+  assert.equal(loadEvents2.length, 3);
+  assert.equal(loadEvents2.some((e) => e.id === victim), false);
+
+  game.onVote(room, io2, victim, "skip");
+  assert.equal(room.gameState.votes.has(victim), false);
+});
