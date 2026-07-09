@@ -326,6 +326,18 @@ function renderUploadFileList(files) {
     container.appendChild(row);
   });
 
+  // Re-apply the current selection's highlight -- this function re-runs
+  // every time the Upload tab is revisited or a new file is uploaded, and
+  // selectedUploadIds persists across those re-renders. Without this, a
+  // previously-selected file would render unhighlighted, and clicking it
+  // again would silently deselect it instead of the (visually implied) select.
+  ["normal", "imposter"].forEach((role) => {
+    const selectedId = selectedUploadIds[role];
+    if (!selectedId) return;
+    const btn = container.querySelector(`.btn-slot[data-role="${role}"][data-id="${selectedId}"]`);
+    if (btn) btn.classList.add("selected");
+  });
+
   container.querySelectorAll(".btn-slot").forEach((btn) => {
     btn.addEventListener("click", () => {
       const role = btn.dataset.role;
