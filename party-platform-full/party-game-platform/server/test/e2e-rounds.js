@@ -141,16 +141,24 @@ async function scenario3_reachTwoPlayers(host, roomCode, remaining, eliminatedPl
   });
 
   await nextRound(host, roomCode);
-  await startRoundAndGetReady(host, roomCode, remaining);
+  const audioByName = await startRoundAndGetReady(host, roomCode, remaining);
   assertTrue(!eliminatedGotAudio, "eliminated player should not receive audio in a later round");
 
   await playSyncedAudio(host, roomCode, remaining);
 
+  // The imposter is randomly assigned among the 3 remaining players — target
+  // a non-imposter for elimination so this round exercises the "auto-end at
+  // 2 active players" path rather than accidentally catching the imposter
+  // (which would end the game via the crew-win path instead, already
+  // covered by Scenario 2's contingency and Scenario 4).
+  const imposterInRound = remaining.find((p) => audioByName[p.name] === "/audio/imposter-song1.mp3");
+  const [victim, survivor] = remaining.filter((p) => p !== imposterInRound);
+
   const resultsPromise = once(host, "game:results");
-  remaining[1].socket.emit("player:vote", { code: roomCode, votedForId: remaining[0].socket.id });
-  remaining[2].socket.emit("player:vote", { code: roomCode, votedForId: remaining[0].socket.id });
-  remaining[0].socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
-  eliminatedPlayer.socket.emit("player:vote", { code: roomCode, votedForId: remaining[0].socket.id }); // ignored
+  imposterInRound.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
+  survivor.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
+  victim.socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
+  eliminatedPlayer.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id }); // ignored
   const finalResults = await resultsPromise;
 
   assertTrue(finalResults.winner === "imposter", "expected the imposter to win once down to 2 active players");
@@ -194,6 +202,12 @@ async function scenario5_playbackControls() {
     host.emit("host:play-audio", { code: roomCode });
   });
   assertTrue(firstPlayAt.position === 0, "expected Play to start from position 0");
+
+  // Wait past the synced start (SYNC_BUFFER_MS) plus a margin so real
+  // playback has actually begun before pausing — pausing immediately after
+  // Play (same tick) legitimately yields an elapsed position of 0, which
+  // would make the "Resume continues from non-zero" assertion below flaky.
+  await new Promise((r) => setTimeout(r, 1700));
 
   const pauseEvent = await new Promise((resolve) => {
     players[0].socket.once("game:pause-at", resolve);
