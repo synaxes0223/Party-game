@@ -4,12 +4,16 @@
 
 const path = require("path");
 const os = require("os");
+const fs = require("fs");
+const crypto = require("crypto");
 const express = require("express");
 const http = require("http");
+const multer = require("multer");
 const { Server } = require("socket.io");
 
 const roomService = require("./roomService");
 const gameRegistry = require("./games/registry");
+const uploadStore = require("./games/uploadStore");
 
 const app = express();
 const server = http.createServer(app);
@@ -17,11 +21,47 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/audio", express.static(path.join(__dirname, "audio")));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.get("/api/games", (req, res) => {
   res.json(gameRegistry.listGames());
+});
+
+const uploadStorage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(mp3|mp4)$/i.test(file.originalname);
+    cb(ok ? null : new Error("Only .mp3 and .mp4 files are allowed."), ok);
+  },
+});
+
+app.post("/api/upload-audio", (req, res) => {
+  upload.single("audio")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded." });
+    }
+    const file = uploadStore.addFile({
+      originalName: req.file.originalname,
+      storedFilename: req.file.filename,
+    });
+    res.json({ id: file.id, originalName: file.originalName, url: file.url });
+  });
 });
 
 function printLanUrl() {
@@ -40,7 +80,7 @@ function printLanUrl() {
 
 // Shared guard for every host-only, in-game action below: confirms the room
 // exists, the caller is its host, and a game module is selected, then hands
-// off to `handler`. Cuts six near-identical blocks down to one.
+// off to `handler`.
 function withHostGame(socket, code, handler) {
   const room = roomService.getRoom(code);
   if (!room || room.hostSocketId !== socket.id) return;
@@ -96,9 +136,27 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ---- HOST: pick a track pair (this also starts the round) ----
+  // ---- HOST: pick a track pair (also starts the round) ----
   socket.on("host:select-track-pair", ({ code, pairId }) => {
     withHostGame(socket, code, (room, game) => game.onSelectTrackPair(room, io, pairId));
+  });
+
+  // ---- HOST: pick a YouTube URL pair (also starts the round) ----
+  socket.on("host:select-youtube-pair", ({ code, normal, imposter }) => {
+    withHostGame(socket, code, (room, game) => game.onSelectYoutubePair(room, io, { normal, imposter }));
+  });
+
+  // ---- HOST: pick an uploaded-file pair (also starts the round) ----
+  socket.on("host:select-upload-pair", ({ code, normalFileId, imposterFileId }) => {
+    withHostGame(socket, code, (room, game) => game.onSelectUploadPair(room, io, { normalFileId, imposterFileId }));
+  });
+
+  // ---- HOST: list the uploaded-file pool ----
+  socket.on("host:list-uploaded-files", ({ code }) => {
+    withHostGame(socket, code, (room, game) => {
+      socket.emit("game:uploaded-files", { files: game.getUploadedFiles ? game.getUploadedFiles() : [] });
+      return {};
+    });
   });
 
   // ---- HOST: playback control ----
