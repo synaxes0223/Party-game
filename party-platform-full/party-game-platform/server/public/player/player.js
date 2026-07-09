@@ -76,14 +76,59 @@ function renderPlayerList(players) {
   });
 }
 
-// ---- Game: audio loading ----
+// ---- Game: audio loading (built-in/upload use <audio>, YouTube uses a
+// hidden IFrame Player -- both are dispatched from the same handler based
+// on the track's sourceType) ----
 const audioEl = document.getElementById("audio-player");
+let currentTrack = null;
+let ytPlayer = null;
+let ytApiReadyPromise = null;
 
-socket.on("game:load-audio", ({ audioUrl }) => {
-  audioEl.src = audioUrl;
-  audioEl.load();
+function ensureYouTubeApiLoaded() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (ytApiReadyPromise) return ytApiReadyPromise;
+  ytApiReadyPromise = new Promise((resolve) => {
+    window.onYouTubeIframeAPIReady = resolve;
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  });
+  return ytApiReadyPromise;
+}
+
+function ensureYtPlayer() {
+  return ensureYouTubeApiLoaded().then(() => {
+    if (ytPlayer) return ytPlayer;
+    return new Promise((resolve) => {
+      ytPlayer = new YT.Player("youtube-player-container", {
+        height: "1",
+        width: "1",
+        events: {
+          onReady: () => resolve(ytPlayer),
+          onError: () => {
+            document.getElementById("ready-status").textContent =
+              "This video couldn't be loaded — ask the host to pick a different link.";
+            document.getElementById("btn-ready").disabled = true;
+          },
+        },
+      });
+    });
+  });
+}
+
+socket.on("game:load-audio", (track) => {
+  currentTrack = track;
   document.getElementById("ready-status").textContent = "";
   document.getElementById("btn-ready").disabled = false;
+
+  if (track.sourceType === "youtube") {
+    ensureYtPlayer().then((player) => {
+      player.cueVideoById({ videoId: track.videoId, startSeconds: track.startSeconds || 0 });
+    });
+  } else {
+    audioEl.src = track.audioUrl;
+    audioEl.load();
+  }
   showScreen("audioReady");
 });
 
@@ -96,6 +141,16 @@ document.getElementById("btn-ready").addEventListener("click", () => {
     document.getElementById("ready-status").textContent = "Waiting for the host to start playback…";
     document.getElementById("btn-ready").disabled = true;
   };
+
+  if (currentTrack && currentTrack.sourceType === "youtube") {
+    ensureYtPlayer().then((player) => {
+      player.playVideo();
+      setTimeout(() => player.pauseVideo(), 50);
+      markReady();
+    });
+    return;
+  }
+
   audioEl.play().then(() => {
     audioEl.pause();
     audioEl.currentTime = 0;
@@ -110,10 +165,17 @@ document.getElementById("btn-ready").addEventListener("click", () => {
 // ---- Game: host-controlled synced playback ----
 socket.on("game:play-at", ({ startAt, position }) => {
   const delay = Math.max(0, startAt - Date.now());
-  setTimeout(() => {
-    audioEl.currentTime = (position || 0) / 1000;
-    audioEl.play().catch((err) => console.warn("Playback failed:", err));
-  }, delay);
+  if (currentTrack && currentTrack.sourceType === "youtube") {
+    setTimeout(() => {
+      ytPlayer.seekTo((position || 0) / 1000, true);
+      ytPlayer.playVideo();
+    }, delay);
+  } else {
+    setTimeout(() => {
+      audioEl.currentTime = (position || 0) / 1000;
+      audioEl.play().catch((err) => console.warn("Playback failed:", err));
+    }, delay);
+  }
 
   selectedVoteTarget = null;
   renderVoteOptions(currentPlayers);
@@ -123,7 +185,11 @@ socket.on("game:play-at", ({ startAt, position }) => {
 
 socket.on("game:pause-at", ({ pauseAt }) => {
   const delay = Math.max(0, pauseAt - Date.now());
-  setTimeout(() => audioEl.pause(), delay);
+  if (currentTrack && currentTrack.sourceType === "youtube") {
+    setTimeout(() => ytPlayer.pauseVideo(), delay);
+  } else {
+    setTimeout(() => audioEl.pause(), delay);
+  }
 });
 
 // ---- Voting: select a target, then a separate confirm step ----
