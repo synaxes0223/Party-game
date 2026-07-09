@@ -38,6 +38,18 @@ function printLanUrl() {
   console.log("");
 }
 
+// Shared guard for every host-only, in-game action below: confirms the room
+// exists, the caller is its host, and a game module is selected, then hands
+// off to `handler`. Cuts six near-identical blocks down to one.
+function withHostGame(socket, code, handler) {
+  const room = roomService.getRoom(code);
+  if (!room || room.hostSocketId !== socket.id) return;
+  const game = gameRegistry.getGame(room.gameId);
+  if (!game) return;
+  const result = handler(room, game);
+  if (result && result.error) socket.emit("host:error", { error: result.error });
+}
+
 io.on("connection", (socket) => {
   // ---- HOST: create room ----
   socket.on("host:create-room", () => {
@@ -79,21 +91,36 @@ io.on("connection", (socket) => {
       gameId,
       meta: game.meta,
     });
+    if (game.getTrackPairs) {
+      socket.emit("game:track-pairs", { pairs: game.getTrackPairs() });
+    }
   });
 
-  // ---- HOST: start game ----
-  socket.on("host:start-game", ({ code }) => {
-    const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
-    if (!room.gameId) {
-      socket.emit("host:error", { error: "No game selected." });
-      return;
-    }
-    const game = gameRegistry.getGame(room.gameId);
-    const result = game.onStart(room, io);
-    if (result.error) {
-      socket.emit("host:error", { error: result.error });
-    }
+  // ---- HOST: pick a track pair (this also starts the round) ----
+  socket.on("host:select-track-pair", ({ code, pairId }) => {
+    withHostGame(socket, code, (room, game) => game.onSelectTrackPair(room, io, pairId));
+  });
+
+  // ---- HOST: playback control ----
+  socket.on("host:play-audio", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostPlay(room, io));
+  });
+
+  socket.on("host:pause-audio", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostPause(room, io));
+  });
+
+  socket.on("host:resume-audio", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostResume(room, io));
+  });
+
+  socket.on("host:restart-audio", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostRestart(room, io));
+  });
+
+  // ---- HOST: advance to the next round ----
+  socket.on("host:next-round", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onNextRound(room, io));
   });
 
   // ---- PLAYER: confirms audio preloaded ----
@@ -129,6 +156,10 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const room = roomService.removePlayer(socket.id);
     if (room) {
+      if (room.gameId && room.gameState) {
+        const game = gameRegistry.getGame(room.gameId);
+        if (game.onPlayerLeft) game.onPlayerLeft(room, io, socket.id);
+      }
       io.to(room.hostSocketId).emit("host:room-updated", {
         room: roomService.publicRoomView(room),
       });
