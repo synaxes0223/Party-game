@@ -40,7 +40,41 @@
     <section id="screen-track-select" class="screen">
       <h2 id="round-title">Round 1</h2>
       <p class="subtitle"><span id="active-count">0</span> players still in</p>
-      <div id="pair-list" class="pair-list"></div>
+
+      <div class="source-tabs">
+        <button type="button" class="tab-btn active" data-tab="builtin">Built-in</button>
+        <button type="button" class="tab-btn" data-tab="youtube">YouTube</button>
+        <button type="button" class="tab-btn" data-tab="upload">Uploaded Files</button>
+      </div>
+
+      <div id="tab-builtin" class="tab-panel active">
+        <div id="pair-list" class="pair-list"></div>
+      </div>
+
+      <div id="tab-youtube" class="tab-panel">
+        <label class="field-label">Normal track URL
+          <input id="yt-normal-url" class="input-field" placeholder="https://youtube.com/watch?v=..." />
+        </label>
+        <label class="field-label">Normal start (seconds)
+          <input id="yt-normal-start" class="input-field" type="number" min="0" value="0" />
+        </label>
+        <label class="field-label">Imposter track URL
+          <input id="yt-imposter-url" class="input-field" placeholder="https://youtube.com/watch?v=..." />
+        </label>
+        <label class="field-label">Imposter start (seconds)
+          <input id="yt-imposter-start" class="input-field" type="number" min="0" value="0" />
+        </label>
+        <button type="button" id="btn-select-youtube" class="btn-primary">Use These Tracks</button>
+      </div>
+
+      <div id="tab-upload" class="tab-panel">
+        <input id="upload-file-input" type="file" accept=".mp3,.mp4" />
+        <button type="button" id="btn-upload-file" class="btn-secondary">Upload</button>
+        <p id="upload-status" class="hint"></p>
+        <div id="upload-file-list" class="upload-file-list"></div>
+        <button type="button" id="btn-select-upload" class="btn-primary">Use Selected Files</button>
+      </div>
+
       <p id="track-select-error" class="error"></p>
     </section>
 

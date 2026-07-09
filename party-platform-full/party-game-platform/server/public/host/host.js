@@ -108,9 +108,17 @@ socket.on("game:track-pairs", ({ pairs }) => {
   }
 });
 
+let selectedUploadIds = { normal: null, imposter: null };
+
 function enterTrackSelect() {
   document.getElementById("active-count").textContent = activePlayerCount;
   document.getElementById("round-title").textContent = `Round ${lastKnownRound + 1}`;
+  document.getElementById("track-select-error").textContent = "";
+  selectedUploadIds = { normal: null, imposter: null };
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+  document.querySelector('.tab-btn[data-tab="builtin"]').classList.add("active");
+  document.getElementById("tab-builtin").classList.add("active");
   showScreen("trackSelect");
 }
 
@@ -240,4 +248,103 @@ socket.on("room:reset", ({ room }) => {
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");
+});
+
+// ---- Track-select tabs ----
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+    if (btn.dataset.tab === "upload") {
+      socket.emit("host:list-uploaded-files", { code: roomCode });
+    }
+  });
+});
+
+// ---- YouTube tab ----
+document.getElementById("btn-select-youtube").addEventListener("click", () => {
+  document.getElementById("track-select-error").textContent = "";
+  const normalUrl = document.getElementById("yt-normal-url").value.trim();
+  const normalStart = Number(document.getElementById("yt-normal-start").value) || 0;
+  const imposterUrl = document.getElementById("yt-imposter-url").value.trim();
+  const imposterStart = Number(document.getElementById("yt-imposter-start").value) || 0;
+  socket.emit("host:select-youtube-pair", {
+    code: roomCode,
+    normal: { url: normalUrl, startSeconds: normalStart },
+    imposter: { url: imposterUrl, startSeconds: imposterStart },
+  });
+});
+
+// ---- Uploaded-files tab ----
+document.getElementById("btn-upload-file").addEventListener("click", async () => {
+  const input = document.getElementById("upload-file-input");
+  const file = input.files[0];
+  const statusEl = document.getElementById("upload-status");
+  if (!file) {
+    statusEl.textContent = "Choose a file first.";
+    return;
+  }
+  statusEl.textContent = "Uploading…";
+  const form = new FormData();
+  form.append("audio", file);
+  try {
+    const res = await fetch("/api/upload-audio", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = data.error || "Upload failed.";
+      return;
+    }
+    statusEl.textContent = `Uploaded ${data.originalName}.`;
+    input.value = "";
+    socket.emit("host:list-uploaded-files", { code: roomCode });
+  } catch (err) {
+    statusEl.textContent = "Upload failed — check your connection.";
+  }
+});
+
+socket.on("game:uploaded-files", ({ files }) => {
+  renderUploadFileList(files);
+});
+
+function renderUploadFileList(files) {
+  const container = document.getElementById("upload-file-list");
+  container.innerHTML = "";
+  if (files.length === 0) {
+    container.innerHTML = '<p class="hint">No files uploaded yet.</p>';
+    return;
+  }
+  files.forEach((f) => {
+    const row = document.createElement("div");
+    row.className = "upload-file-row";
+    row.innerHTML = `
+      <span>${f.originalName}</span>
+      <button type="button" class="btn-secondary btn-slot" data-role="normal" data-id="${f.id}">Normal</button>
+      <button type="button" class="btn-secondary btn-slot" data-role="imposter" data-id="${f.id}">Imposter</button>
+    `;
+    container.appendChild(row);
+  });
+
+  container.querySelectorAll(".btn-slot").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const role = btn.dataset.role;
+      const id = btn.dataset.id;
+      selectedUploadIds[role] = selectedUploadIds[role] === id ? null : id;
+      container.querySelectorAll(`.btn-slot[data-role="${role}"]`).forEach((b) => b.classList.remove("selected"));
+      if (selectedUploadIds[role]) {
+        const activeBtn = container.querySelector(`.btn-slot[data-role="${role}"][data-id="${selectedUploadIds[role]}"]`);
+        if (activeBtn) activeBtn.classList.add("selected");
+      }
+    });
+  });
+}
+
+document.getElementById("btn-select-upload").addEventListener("click", () => {
+  document.getElementById("track-select-error").textContent = "";
+  socket.emit("host:select-upload-pair", {
+    code: roomCode,
+    normalFileId: selectedUploadIds.normal,
+    imposterFileId: selectedUploadIds.imposter,
+  });
 });

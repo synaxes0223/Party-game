@@ -139,3 +139,47 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .btn-secondary:hover { background: rgba(124,92,255,0.15); transform: translateY(-2px); }
+
+.source-tabs { display: flex; gap: 8px; margin: 16px 0; }
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.tab-btn.active { border-color: var(--accent); color: var(--text); background: rgba(255,95,162,0.12); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.field-label { display: block; margin-bottom: 12px; color: var(--text-dim); font-size: 0.9rem; }
+
+.input-field {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.1);
+  background: var(--panel);
+  color: var(--text);
+  margin-top: 6px;
+}
+.input-field:focus { outline: none; border-color: var(--accent); }
+
+.upload-file-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.upload-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.upload-file-row span { flex: 1; font-size: 0.9rem; }
+.btn-slot { padding: 8px 12px; font-size: 0.85rem; width: auto; }
+.btn-slot.selected { border-color: var(--accent); background: rgba(255,95,162,0.25); }
