@@ -5,6 +5,13 @@ let myId = null;
 let currentPlayers = [];
 let selectedVoteTarget = null;
 let iAmEliminated = false;
+// room:player-list only reflects join/disconnect, never in-game elimination
+// (the server's publicRoomView has no notion of it) — so the vote candidate
+// list must track eliminations itself from game:round-results, accumulated
+// across every round, or a voter could target an already-eliminated player.
+// The server silently drops such a vote (no error emitted back), and since
+// voting has no timer, that would hang the round forever with no recovery.
+let eliminatedPlayerIds = new Set();
 
 const screens = {
   join: document.getElementById("screen-join"),
@@ -126,7 +133,7 @@ function renderVoteOptions(players) {
   const confirmBtn = document.getElementById("btn-confirm-vote");
   confirmBtn.disabled = true;
 
-  const candidates = players.filter((p) => p.id !== myId);
+  const candidates = players.filter((p) => p.id !== myId && !eliminatedPlayerIds.has(p.id));
   candidates.forEach((p) => {
     const btn = document.createElement("button");
     btn.className = "vote-btn";
@@ -163,8 +170,11 @@ socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) =
     ? `${eliminated.nickname}${eliminated.id === myId ? " (you)" : ""} was voted out — ${wasImposter ? "they were" : "they were NOT"} the imposter. ${remainingActive} players remain.`
     : `No one was eliminated this round. ${remainingActive} players remain.`;
 
-  if (eliminated && eliminated.id === myId) {
-    iAmEliminated = true;
+  if (eliminated) {
+    eliminatedPlayerIds.add(eliminated.id);
+    if (eliminated.id === myId) {
+      iAmEliminated = true;
+    }
   }
 
   if (iAmEliminated) {
@@ -201,6 +211,7 @@ socket.on("game:results", ({ imposter, winner, results }) => {
 
 socket.on("room:reset", ({ room }) => {
   iAmEliminated = false;
+  eliminatedPlayerIds = new Set();
   renderPlayerList(room.players);
   document.getElementById("btn-ready").disabled = false;
   showScreen("waiting");
