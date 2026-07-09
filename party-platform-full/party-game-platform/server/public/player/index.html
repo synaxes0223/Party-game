@@ -28,23 +28,36 @@
 
     <section id="screen-audio-ready" class="screen">
       <h1>🎧 Put your earphones in</h1>
-      <p class="subtitle">Tap below when ready — audio will start for everyone at the same moment.</p>
+      <p class="subtitle">Tap below when ready — the host will start playback for everyone at the same moment.</p>
       <button id="btn-ready" class="btn-primary">I'm Ready</button>
       <p id="ready-status" class="hint"></p>
     </section>
 
     <section id="screen-playing" class="screen">
       <h1>🔊 Listen carefully…</h1>
-      <p class="subtitle">Take your earphones out once it's done, then vote below.</p>
+      <p class="subtitle">Discuss with the group, then vote below whenever you're ready.</p>
       <div id="vote-list" class="vote-list"></div>
+      <button id="btn-confirm-vote" class="btn-primary" disabled>Confirm Vote</button>
       <p id="vote-status" class="hint"></p>
     </section>
 
+    <section id="screen-round-results" class="screen">
+      <h2>Round Results</h2>
+      <p id="round-elimination-text" class="imposter-reveal"></p>
+      <p class="hint">Waiting for host to start the next round…</p>
+    </section>
+
+    <section id="screen-spectator" class="screen">
+      <h1>👀 You're out</h1>
+      <p class="subtitle">You've been eliminated — you can keep watching the results each round.</p>
+      <p id="spectator-round-text" class="hint"></p>
+    </section>
+
     <section id="screen-results" class="screen">
-      <h2>Results</h2>
+      <h2>Game Over</h2>
       <p id="imposter-reveal" class="imposter-reveal"></p>
       <ul id="results-list" class="results-list"></ul>
-      <p class="hint">Waiting for host to start the next round…</p>
+      <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
   </div>
