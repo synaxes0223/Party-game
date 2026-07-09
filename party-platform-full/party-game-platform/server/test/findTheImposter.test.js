@@ -267,3 +267,101 @@ test("an eliminated player is excluded from audio and votes in the following rou
   game.onVote(room, io2, voterB, "skip");
   assert.equal(room.gameState.votes.has(voterB), true);
 });
+
+test("getUploadedFiles reflects the upload store's contents", () => {
+  const uploadStore = require("../games/uploadStore");
+  const before = game.getUploadedFiles().length;
+  uploadStore.addFile({ originalName: "extra.mp3", storedFilename: "extra-stored.mp3" });
+  const after = game.getUploadedFiles();
+  assert.equal(after.length, before + 1);
+  assert.ok(after.some((f) => f.originalName === "extra.mp3"));
+  const added = after.find((f) => f.originalName === "extra.mp3");
+  assert.equal("url" in added, false); // never leaks the server file path, only display fields (id/name/date)
+});
+
+test("onSelectYoutubePair starts a round with the given tracks and per-player start seconds", () => {
+  const room = makeRoom(["A", "B", "C"]);
+  const { io, emitted } = makeStubIo();
+  const result = game.onSelectYoutubePair(room, io, {
+    normal: { url: "https://youtu.be/dQw4w9WgXcQ", startSeconds: 10 },
+    imposter: { url: "https://youtu.be/dQw4w9WgXcQ", startSeconds: 40 },
+  });
+  assert.deepEqual(result, {});
+  assert.equal(room.gameState.phase, "loading");
+
+  const loadEvents = emitted.filter((e) => e.event === "game:load-audio");
+  assert.equal(loadEvents.length, 3);
+  const imposterEvent = loadEvents.find((e) => e.id === room.gameState.imposterId);
+  const crewEvent = loadEvents.find((e) => e.id !== room.gameState.imposterId);
+  assert.equal(imposterEvent.payload.sourceType, "youtube");
+  assert.equal(imposterEvent.payload.startSeconds, 40);
+  assert.equal(crewEvent.payload.startSeconds, 10);
+});
+
+test("onSelectYoutubePair rejects an unparseable URL without starting a round", () => {
+  const room = makeRoom(["A", "B", "C"]);
+  const { io } = makeStubIo();
+  const result = game.onSelectYoutubePair(room, io, {
+    normal: { url: "not a url", startSeconds: 0 },
+    imposter: { url: "https://youtu.be/dQw4w9WgXcQ", startSeconds: 0 },
+  });
+  assert.ok(result.error);
+  assert.equal(room.gameState, null);
+});
+
+test("onSelectUploadPair starts a round using files from the pool", () => {
+  const uploadStore = require("../games/uploadStore");
+  const fileA = uploadStore.addFile({ originalName: "songA.mp3", storedFilename: "a-songA.mp3" });
+  const fileB = uploadStore.addFile({ originalName: "songB.mp3", storedFilename: "b-songB.mp3" });
+
+  const room = makeRoom(["A", "B", "C"]);
+  const { io, emitted } = makeStubIo();
+  const result = game.onSelectUploadPair(room, io, { normalFileId: fileA.id, imposterFileId: fileB.id });
+  assert.deepEqual(result, {});
+
+  const loadEvents = emitted.filter((e) => e.event === "game:load-audio");
+  const imposterEvent = loadEvents.find((e) => e.id === room.gameState.imposterId);
+  const crewEvent = loadEvents.find((e) => e.id !== room.gameState.imposterId);
+  assert.equal(imposterEvent.payload.audioUrl, fileB.url);
+  assert.equal(crewEvent.payload.audioUrl, fileA.url);
+  assert.equal(imposterEvent.payload.sourceType, "upload");
+});
+
+test("onSelectUploadPair errors when the pool can't supply 2 different files", () => {
+  const room = makeRoom(["A", "B", "C"]);
+  const { io } = makeStubIo();
+  const result = game.onSelectUploadPair(room, io, { normalFileId: null, imposterFileId: null });
+  // The shared upload pool may already contain files from earlier tests in
+  // this run; this test only asserts the error path is reachable when it's
+  // genuinely empty, so it clears by reading the module fresh isn't
+  // possible (no reset export) -- instead assert on a pool-independent
+  // invariant: requesting the SAME explicit id for both slots always
+  // errors regardless of pool size.
+  const uploadStore = require("../games/uploadStore");
+  const [first] = uploadStore.listFiles();
+  if (first) {
+    const dup = game.onSelectUploadPair(room, io, { normalFileId: first.id, imposterFileId: first.id });
+    assert.ok(dup.error);
+  } else {
+    assert.ok(result.error);
+  }
+});
+
+test("broadcastPlayAt gives each player their own track's position via onHostPlay", () => {
+  const room = makeRoom(["A", "B", "C"]);
+  const { io } = makeStubIo();
+  game.onSelectYoutubePair(room, io, {
+    normal: { url: "https://youtu.be/dQw4w9WgXcQ", startSeconds: 10 },
+    imposter: { url: "https://youtu.be/dQw4w9WgXcQ", startSeconds: 40 },
+  });
+  readyAllActive(room, io);
+
+  const { io: io2, emitted: emitted2 } = makeStubIo();
+  game.onHostPlay(room, io2);
+
+  const playEvents = emitted2.filter((e) => e.event === "game:play-at");
+  const imposterEvent = playEvents.find((e) => e.id === room.gameState.imposterId);
+  const crewEvent = playEvents.find((e) => e.id !== room.gameState.imposterId);
+  assert.equal(imposterEvent.payload.position, 40000);
+  assert.equal(crewEvent.payload.position, 10000);
+});

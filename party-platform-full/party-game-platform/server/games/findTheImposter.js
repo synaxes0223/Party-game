@@ -2,8 +2,15 @@
 // Game module: one player secretly gets a slightly different audio track.
 // Runs as repeated elimination rounds (Mafia/Werewolf-style) until either the
 // imposter is voted out (crew wins) or only 2 active players remain (imposter wins).
+//
+// A round's track pair can come from three sources: the built-in SONG_PAIRS
+// list, a host-pasted YouTube URL pair, or a pair picked from the host's
+// uploaded-file pool. All three converge on startRound() once resolved into
+// a common { normal, imposter } TrackRef shape.
 
 const { resolveRound, checkGameEnd, computeElapsedMs, SYNC_BUFFER_MS } = require("./imposterLogic");
+const { buildYoutubePair, pickUploadPair, computePlayerPosition } = require("./audioSourceLogic");
+const uploadStore = require("./uploadStore");
 
 const SONG_PAIRS = [
   {
@@ -28,9 +35,17 @@ function getTrackPairs() {
   return SONG_PAIRS.map((p) => ({ id: p.id, label: p.label }));
 }
 
+function getUploadedFiles() {
+  return uploadStore.listFiles().map((f) => ({ id: f.id, originalName: f.originalName, uploadedAt: f.uploadedAt }));
+}
+
 function getActivePlayerIds(room) {
   const eliminated = room.gameState ? room.gameState.eliminated : new Set();
   return Array.from(room.players.keys()).filter((id) => !eliminated.has(id));
+}
+
+function getTrackForPlayer(gs, pid) {
+  return pid === gs.imposterId ? gs.songPair.imposter : gs.songPair.normal;
 }
 
 function freshRoundState(gameState) {
@@ -40,12 +55,11 @@ function freshRoundState(gameState) {
   gameState.playback = { segmentStartedAt: null, segmentStartPosition: 0, isPaused: false };
 }
 
-// Called when the host picks a track pair — this both selects the audio AND
-// starts the round (round 1 also assigns the imposter, once, for the game).
-function onSelectTrackPair(room, io, pairId) {
-  const pair = SONG_PAIRS.find((p) => p.id === pairId);
-  if (!pair) return { error: "Unknown track pair." };
-
+// Shared by all three track-source paths: assigns the imposter on round 1,
+// advances the round counter on later rounds, stores the resolved song pair,
+// and sends each active player their own track plus the host their
+// game:started signal.
+function startRound(room, io, songPair) {
   if (!room.gameState) {
     const playerIds = Array.from(room.players.keys());
     if (playerIds.length < meta.minPlayers) {
@@ -68,16 +82,13 @@ function onSelectTrackPair(room, io, pairId) {
   }
 
   const gs = room.gameState;
-  gs.songPair = pair;
+  gs.songPair = songPair;
   room.state = "in-progress";
 
   const activeIds = getActivePlayerIds(room);
   for (const pid of activeIds) {
-    const isImposter = pid === gs.imposterId;
-    io.to(pid).emit("game:load-audio", {
-      gameId: meta.id,
-      audioUrl: isImposter ? pair.imposterUrl : pair.normalUrl,
-    });
+    const track = getTrackForPlayer(gs, pid);
+    io.to(pid).emit("game:load-audio", { gameId: meta.id, ...track });
   }
 
   io.to(room.hostSocketId).emit("game:started", {
@@ -86,6 +97,34 @@ function onSelectTrackPair(room, io, pairId) {
   });
 
   return {};
+}
+
+// Called when the host picks a built-in track pair — this both selects the
+// audio AND starts the round.
+function onSelectTrackPair(room, io, pairId) {
+  const pair = SONG_PAIRS.find((p) => p.id === pairId);
+  if (!pair) return { error: "Unknown track pair." };
+
+  return startRound(room, io, {
+    normal: { sourceType: "builtin", audioUrl: pair.normalUrl, startSeconds: 0 },
+    imposter: { sourceType: "builtin", audioUrl: pair.imposterUrl, startSeconds: 0 },
+  });
+}
+
+// Called when the host submits a YouTube URL pair for this round.
+function onSelectYoutubePair(room, io, { normal, imposter }) {
+  const result = buildYoutubePair(normal, imposter);
+  if (result.error) return { error: result.error };
+  return startRound(room, io, { normal: result.normal, imposter: result.imposter });
+}
+
+// Called when the host picks (or partially picks, with random-fill) a pair
+// from the uploaded-file pool for this round.
+function onSelectUploadPair(room, io, { normalFileId, imposterFileId }) {
+  const pool = uploadStore.listFiles();
+  const result = pickUploadPair(pool, normalFileId, imposterFileId);
+  if (result.error) return { error: result.error };
+  return startRound(room, io, { normal: result.normal, imposter: result.imposter });
 }
 
 // Called when a player's client confirms audio is preloaded and ready.
@@ -106,9 +145,15 @@ function onPlayerReady(room, io, socketId) {
   return {};
 }
 
-function broadcastPlayAt(room, io, startAt, position) {
+// Broadcasts a synced play instant to every active player, computing each
+// player's own position (their track's start-second + the shared elapsed
+// time) rather than one shared position — see audioSourceLogic.computePlayerPosition.
+function broadcastPlayAt(room, io, startAt, elapsedMs) {
+  const gs = room.gameState;
   const activeIds = getActivePlayerIds(room);
   for (const pid of activeIds) {
+    const track = getTrackForPlayer(gs, pid);
+    const position = computePlayerPosition(track, elapsedMs);
     io.to(pid).emit("game:play-at", { startAt, position });
   }
 }
@@ -134,9 +179,9 @@ function onHostPause(room, io) {
     return { error: "Nothing is playing right now." };
   }
   const pauseAt = Date.now() + SYNC_BUFFER_MS;
-  const position = gs.playback.segmentStartPosition + computeElapsedMs(gs.playback.segmentStartedAt, pauseAt);
+  const elapsedMs = gs.playback.segmentStartPosition + computeElapsedMs(gs.playback.segmentStartedAt, pauseAt);
   gs.playback.isPaused = true;
-  gs.playback.pausedPosition = position;
+  gs.playback.pausedPosition = elapsedMs;
 
   const activeIds = getActivePlayerIds(room);
   for (const pid of activeIds) {
@@ -151,9 +196,9 @@ function onHostResume(room, io) {
     return { error: "Nothing is paused right now." };
   }
   const startAt = Date.now() + SYNC_BUFFER_MS;
-  const resumePosition = gs.playback.pausedPosition;
-  gs.playback = { segmentStartedAt: startAt, segmentStartPosition: resumePosition, isPaused: false };
-  broadcastPlayAt(room, io, startAt, resumePosition);
+  const resumeElapsedMs = gs.playback.pausedPosition;
+  gs.playback = { segmentStartedAt: startAt, segmentStartPosition: resumeElapsedMs, isPaused: false };
+  broadcastPlayAt(room, io, startAt, resumeElapsedMs);
   return {};
 }
 
@@ -288,7 +333,10 @@ function onPlayerLeft(room, io, socketId) {
 module.exports = {
   meta,
   getTrackPairs,
+  getUploadedFiles,
   onSelectTrackPair,
+  onSelectYoutubePair,
+  onSelectUploadPair,
   onPlayerReady,
   onHostPlay,
   onHostPause,
