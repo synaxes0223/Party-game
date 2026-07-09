@@ -5,10 +5,15 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test \"test/*.test.js\"",
+    "test:e2e": "node test/e2e-rounds.js"
   },
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
   }
 }
