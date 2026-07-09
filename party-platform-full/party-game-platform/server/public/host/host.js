@@ -2,6 +2,9 @@ const socket = io();
 
 let roomCode = null;
 let selectedGameId = null;
+let hasStartedFirstRound = false;
+let activePlayerCount = 0;
+let lastKnownRound = 0;
 
 const screens = {
   start: document.getElementById("screen-start"),
@@ -40,6 +43,7 @@ function renderPlayers(players) {
   const emptyHint = document.getElementById("player-empty-hint");
 
   countEl.textContent = players.length;
+  activePlayerCount = players.length;
   list.innerHTML = "";
   players.forEach((p) => {
     const li = document.createElement("li");
@@ -81,7 +85,7 @@ function updateStartButton() {
 
 document.getElementById("btn-start-game").addEventListener("click", () => {
   document.getElementById("lobby-error").textContent = "";
-  showScreen("trackSelect");
+  enterTrackSelect();
 });
 
 socket.on("host:error", ({ error }) => {
@@ -90,10 +94,25 @@ socket.on("host:error", ({ error }) => {
 });
 
 // ---- Track selection ----
+// game:track-pairs fires from two different moments: (1) the instant a game
+// is selected in the lobby — before players may have joined, so this must
+// NOT jump the host off the lobby's player-count gate; and (2) after
+// host:next-round, where there's no gating button and the host should land
+// on track-select immediately. hasStartedFirstRound distinguishes the two:
+// only case (2) auto-navigates; case (1) just caches the pairs and waits for
+// the "Continue to Round 1" button.
 socket.on("game:track-pairs", ({ pairs }) => {
   renderPairList(pairs);
-  showScreen("trackSelect");
+  if (hasStartedFirstRound) {
+    enterTrackSelect();
+  }
 });
+
+function enterTrackSelect() {
+  document.getElementById("active-count").textContent = activePlayerCount;
+  document.getElementById("round-title").textContent = `Round ${lastKnownRound + 1}`;
+  showScreen("trackSelect");
+}
 
 function renderPairList(pairs) {
   const container = document.getElementById("pair-list");
@@ -112,6 +131,8 @@ function renderPairList(pairs) {
 
 // ---- Round start / playback ----
 socket.on("game:started", ({ round, playerCount }) => {
+  hasStartedFirstRound = true;
+  lastKnownRound = round;
   document.getElementById("round-title").textContent = `Round ${round}`;
   document.getElementById("game-title-active").textContent = `Round ${round} — Find the Imposter`;
   document.getElementById("progress-text").textContent = `Loading audio on ${playerCount} devices…`;
@@ -173,6 +194,7 @@ socket.on("game:vote-progress", ({ voted, total }) => {
 
 // ---- Round results ----
 socket.on("game:round-results", ({ round, eliminated, wasImposter, remainingActive }) => {
+  activePlayerCount = remainingActive;
   document.getElementById("round-results-title").textContent = `Round ${round} Results`;
   const text = eliminated
     ? `${eliminated.nickname} was voted out — they were ${wasImposter ? "" : "NOT "}the imposter. ${remainingActive} players remain.`
@@ -213,6 +235,8 @@ document.getElementById("btn-play-again").addEventListener("click", () => {
 });
 
 socket.on("room:reset", ({ room }) => {
+  hasStartedFirstRound = false;
+  lastKnownRound = 0;
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");
