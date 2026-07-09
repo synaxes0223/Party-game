@@ -164,6 +164,12 @@ document.getElementById("btn-confirm-vote").addEventListener("click", () => {
   document.getElementById("vote-status").textContent = "Vote submitted — waiting for others…";
 });
 
+socket.on("player:vote-rejected", ({ reason }) => {
+  selectedVoteTarget = null;
+  renderVoteOptions(currentPlayers);
+  document.getElementById("vote-status").textContent = reason || "That vote couldn't be submitted — pick again.";
+});
+
 // ---- Round results ----
 socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) => {
   const text = eliminated

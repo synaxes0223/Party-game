@@ -69,6 +69,10 @@ function removeRoomIfEmpty(code) {
   return false;
 }
 
+function deleteRoom(code) {
+  rooms.delete((code || "").toUpperCase());
+}
+
 function findRoomByHost(hostSocketId) {
   for (const room of rooms.values()) {
     if (room.hostSocketId === hostSocketId) return room;
@@ -95,6 +99,7 @@ module.exports = {
   joinRoom,
   removePlayer,
   removeRoomIfEmpty,
+  deleteRoom,
   findRoomByHost,
   publicRoomView,
 };

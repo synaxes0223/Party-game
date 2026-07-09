@@ -172,6 +172,7 @@ io.on("connection", (socket) => {
     const hostedRoom = roomService.findRoomByHost(socket.id);
     if (hostedRoom) {
       io.in(hostedRoom.code).emit("room:host-disconnected");
+      roomService.deleteRoom(hostedRoom.code);
     }
   });
 });

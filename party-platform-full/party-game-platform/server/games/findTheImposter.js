@@ -130,7 +130,7 @@ function onHostPlay(room, io) {
 
 function onHostPause(room, io) {
   const gs = room.gameState;
-  if (!gs || gs.phase !== "playing" || gs.playback.isPaused) {
+  if (!gs || (gs.phase !== "playing" && gs.phase !== "voting") || gs.playback.isPaused) {
     return { error: "Nothing is playing right now." };
   }
   const pauseAt = Date.now() + SYNC_BUFFER_MS;
@@ -147,7 +147,7 @@ function onHostPause(room, io) {
 
 function onHostResume(room, io) {
   const gs = room.gameState;
-  if (!gs || gs.phase !== "playing" || !gs.playback.isPaused) {
+  if (!gs || (gs.phase !== "playing" && gs.phase !== "voting") || !gs.playback.isPaused) {
     return { error: "Nothing is paused right now." };
   }
   const startAt = Date.now() + SYNC_BUFFER_MS;
@@ -159,7 +159,7 @@ function onHostResume(room, io) {
 
 function onHostRestart(room, io) {
   const gs = room.gameState;
-  if (!gs || gs.phase !== "playing") return { error: "Round isn't playing." };
+  if (!gs || (gs.phase !== "playing" && gs.phase !== "voting")) return { error: "Round isn't playing." };
   const startAt = Date.now() + SYNC_BUFFER_MS;
   gs.playback = { segmentStartedAt: startAt, segmentStartPosition: 0, isPaused: false };
   broadcastPlayAt(room, io, startAt, 0);
@@ -174,6 +174,9 @@ function onVote(room, io, socketId, votedForId) {
   const activeIds = getActivePlayerIds(room);
   if (!activeIds.includes(socketId)) return {};
   if (votedForId !== "skip" && (votedForId === socketId || !activeIds.includes(votedForId))) {
+    io.to(socketId).emit("player:vote-rejected", {
+      reason: "That player is no longer available to vote for. Pick again.",
+    });
     return {};
   }
 
@@ -249,10 +252,15 @@ function onNextRound(room, io) {
 }
 
 // Called from index.js's disconnect handler, AFTER roomService has already
-// removed the player from room.players. Only re-checks whether the round can
-// now resolve with one fewer active player. Does not specially detect the
-// imposter themselves disconnecting — matches the existing platform
-// limitation of no reconnect/session-recovery support, not fixed here.
+// removed the player from room.players. Re-checks whether the round can now
+// resolve with one fewer active player, and independently ends the game if
+// attrition alone has dropped the active roster to 2 or fewer (matching the
+// same threshold checkGameEnd uses after a normal elimination) — that check
+// otherwise only runs inside resolveRoundAndAdvance, so a disconnect-driven
+// drop to 2 players would never end the game on its own. Does not specially
+// detect the imposter themselves disconnecting — matches the existing
+// platform limitation of no reconnect/session-recovery support, not fixed
+// here.
 function onPlayerLeft(room, io, socketId) {
   const gs = room.gameState;
   if (!gs || gs.phase === "game-over") return {};
@@ -262,9 +270,16 @@ function onPlayerLeft(room, io, socketId) {
   const activeIds = getActivePlayerIds(room);
   if (activeIds.length === 0) return {};
 
+  if (activeIds.length <= 2) {
+    gs.phase = "game-over";
+    gs.winner = "imposter";
+    revealFinalResults(room, io, "imposter");
+    return {};
+  }
+
   if (gs.phase === "loading" && gs.readyToPlay.size >= activeIds.length) {
     io.to(room.hostSocketId).emit("game:all-ready");
-  } else if (gs.phase === "voting" && gs.votes.size >= activeIds.length) {
+  } else if ((gs.phase === "playing" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
