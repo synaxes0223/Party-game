@@ -78,6 +78,40 @@
       <p id="track-select-error" class="error"></p>
     </section>
 
+    <section id="screen-word-select" class="screen">
+      <h2 id="word-round-title">Round 1</h2>
+      <p class="subtitle"><span id="word-active-count">0</span> players still in</p>
+
+      <div class="source-tabs">
+        <button type="button" class="tab-btn active" data-tab="auto">Auto</button>
+        <button type="button" class="tab-btn" data-tab="custom">Custom</button>
+      </div>
+
+      <div id="tab-auto" class="tab-panel active">
+        <button type="button" id="btn-select-auto-pair" class="btn-primary">Start Round with Random Pair</button>
+      </div>
+
+      <div id="tab-custom" class="tab-panel">
+        <label class="field-label">Normal word
+          <input id="custom-normal-word" class="input-field" placeholder="e.g. Coffee" />
+        </label>
+        <label class="field-label">Wolf word
+          <input id="custom-imposter-word" class="input-field" placeholder="e.g. Tea" />
+        </label>
+        <button type="button" id="btn-select-custom-pair" class="btn-primary">Start Round</button>
+      </div>
+
+      <p id="word-select-error" class="error"></p>
+    </section>
+
+    <section id="screen-word-round" class="screen">
+      <h2 id="word-round-title-active"></h2>
+      <div class="progress-box">
+        <p id="word-round-status">Ready when you are.</p>
+      </div>
+      <button type="button" id="btn-reveal-words" class="btn-primary">Reveal Words</button>
+    </section>
+
     <section id="screen-game" class="screen">
       <h2 id="game-title-active"></h2>
       <div id="game-progress" class="progress-box">

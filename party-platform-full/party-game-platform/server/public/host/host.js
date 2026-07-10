@@ -11,9 +11,18 @@ const screens = {
   lobby: document.getElementById("screen-lobby"),
   trackSelect: document.getElementById("screen-track-select"),
   game: document.getElementById("screen-game"),
+  wordSelect: document.getElementById("screen-word-select"),
+  wordRound: document.getElementById("screen-word-round"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
 };
+
+// Only Word Wolf uses "wolf" wording in the shared round-results/final-
+// results screens; every other game (today, just Find the Imposter) keeps
+// the original "imposter" wording unchanged.
+function roleLabel() {
+  return selectedGameId === "word-wolf" ? "wolf" : "imposter";
+}
 
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
@@ -85,12 +94,17 @@ function updateStartButton() {
 
 document.getElementById("btn-start-game").addEventListener("click", () => {
   document.getElementById("lobby-error").textContent = "";
-  enterTrackSelect();
+  if (selectedGameId === "word-wolf") {
+    enterWordSelect();
+  } else {
+    enterTrackSelect();
+  }
 });
 
 socket.on("host:error", ({ error }) => {
   document.getElementById("lobby-error").textContent = error;
   document.getElementById("track-select-error").textContent = error;
+  document.getElementById("word-select-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -137,10 +151,55 @@ function renderPairList(pairs) {
   });
 }
 
+// ---- Word Wolf: word-source selection ----
+function enterWordSelect() {
+  document.getElementById("word-active-count").textContent = activePlayerCount;
+  document.getElementById("word-round-title").textContent = `Round ${lastKnownRound + 1}`;
+  document.getElementById("word-select-error").textContent = "";
+  document.getElementById("custom-normal-word").value = "";
+  document.getElementById("custom-imposter-word").value = "";
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+  document.querySelector('.tab-btn[data-tab="auto"]').classList.add("active");
+  document.getElementById("tab-auto").classList.add("active");
+  showScreen("wordSelect");
+}
+
+socket.on("game:word-select-ready", () => {
+  enterWordSelect();
+});
+
+document.getElementById("btn-select-auto-pair").addEventListener("click", () => {
+  document.getElementById("word-select-error").textContent = "";
+  socket.emit("host:select-auto-pair", { code: roomCode });
+});
+
+document.getElementById("btn-select-custom-pair").addEventListener("click", () => {
+  document.getElementById("word-select-error").textContent = "";
+  const normalWord = document.getElementById("custom-normal-word").value.trim();
+  const imposterWord = document.getElementById("custom-imposter-word").value.trim();
+  socket.emit("host:select-custom-pair", { code: roomCode, normalWord, imposterWord });
+});
+
+document.getElementById("btn-reveal-words").addEventListener("click", () => {
+  socket.emit("host:reveal-words", { code: roomCode });
+  document.getElementById("word-round-status").textContent = "Words revealed — players are discussing and voting.";
+  document.getElementById("btn-reveal-words").style.display = "none";
+});
+
 // ---- Round start / playback ----
 socket.on("game:started", ({ round, playerCount }) => {
   hasStartedFirstRound = true;
   lastKnownRound = round;
+
+  if (selectedGameId === "word-wolf") {
+    document.getElementById("word-round-title-active").textContent = `Round ${round} — Word Wolf`;
+    document.getElementById("word-round-status").textContent = `${playerCount} players in this round. Ready when you are.`;
+    document.getElementById("btn-reveal-words").style.display = "block";
+    showScreen("wordRound");
+    return;
+  }
+
   document.getElementById("round-title").textContent = `Round ${round}`;
   document.getElementById("game-title-active").textContent = `Round ${round} — Find the Imposter`;
   document.getElementById("progress-text").textContent = `Loading audio on ${playerCount} devices…`;
@@ -204,8 +263,9 @@ socket.on("game:vote-progress", ({ voted, total }) => {
 socket.on("game:round-results", ({ round, eliminated, wasImposter, remainingActive }) => {
   activePlayerCount = remainingActive;
   document.getElementById("round-results-title").textContent = `Round ${round} Results`;
+  const role = roleLabel();
   const text = eliminated
-    ? `${eliminated.nickname} was voted out — they were ${wasImposter ? "" : "NOT "}the imposter. ${remainingActive} players remain.`
+    ? `${eliminated.nickname} was voted out — they were ${wasImposter ? "" : "NOT "}the ${role}. ${remainingActive} players remain.`
     : `No one was eliminated this round. ${remainingActive} players remain.`;
   document.getElementById("round-elimination-text").textContent = text;
   showScreen("roundResults");
@@ -217,9 +277,11 @@ document.getElementById("btn-next-round").addEventListener("click", () => {
 
 // ---- Final results ----
 socket.on("game:results", ({ imposter, winner, results }) => {
+  const role = roleLabel();
+  const emoji = role === "wolf" ? "🐺" : "🎭";
   const winnerText = winner === "crew"
-    ? "🕵️ The crew caught the imposter!"
-    : "🎭 The imposter got away with it!";
+    ? `🕵️ The crew caught the ${role}!`
+    : `${emoji} The ${role} got away with it!`;
   document.getElementById("imposter-reveal").textContent = imposter
     ? `${winnerText} It was ${imposter.nickname}.`
     : winnerText;
@@ -230,7 +292,7 @@ socket.on("game:results", ({ imposter, winner, results }) => {
     const li = document.createElement("li");
     if (r.wasImposter) li.classList.add("was-imposter");
     const status = r.eliminated ? "eliminated" : "survived";
-    li.innerHTML = `<span>${r.nickname}${r.wasImposter ? " 🎭" : ""}</span><span>${status}</span>`;
+    li.innerHTML = `<span>${r.nickname}${r.wasImposter ? ` ${emoji}` : ""}</span><span>${status}</span>`;
     list.appendChild(li);
   });
 
