@@ -6,7 +6,7 @@
 const path = require("node:path");
 const { io } = require("socket.io-client");
 
-const PORT = 3098;
+const PORT = 3097;
 const URL = `http://localhost:${PORT}`;
 
 function once(emitter, event) {
