@@ -23,10 +23,6 @@ function makeRoom(nicknames) {
   };
 }
 
-function readyVotersFromResult(room) {
-  return Array.from(room.players.keys()).filter((id) => !room.gameState.eliminated.has(id));
-}
-
 test("onSelectAutoPair rejects starting with too few players", () => {
   const room = makeRoom(["A", "B"]);
   const { io } = makeStubIo();
@@ -190,8 +186,12 @@ test("a second round picks an auto pair not used in round 1 (until the pool is e
 
   game.onSelectAutoPair(room, io);
   assert.equal(room.gameState.round, 2);
-  assert.equal(room.gameState.usedPairIndexes.size >= 1, true);
-  void firstNormalWord;
+  // pickAutoPair excludes already-used indexes until the pool is exhausted --
+  // with a fresh usedPairIndexes set and a 32-entry pool, two consecutive
+  // draws are guaranteed to land on two different indexes/words, not just
+  // "probably" different.
+  assert.equal(room.gameState.usedPairIndexes.size, 2);
+  assert.notEqual(room.gameState.wordPair.normal.word, firstNormalWord);
 });
 
 test("onPlayerLeft removes a pending vote and lets the round resolve with one fewer voter", () => {
@@ -221,5 +221,4 @@ test("onPlayerLeft ends the game if attrition alone drops active players to 2", 
 
   assert.equal(room.gameState.phase, "game-over");
   assert.ok(emitted.some((e) => e.event === "game:results"));
-  void readyVotersFromResult;
 });
