@@ -5,9 +5,11 @@
 // onPlayerAction interface across games.
 
 const findTheImposter = require("./findTheImposter");
+const wordWolf = require("./wordWolf");
 
 const GAMES = {
   [findTheImposter.meta.id]: findTheImposter,
+  [wordWolf.meta.id]: wordWolf,
 };
 
 function listGames() {
