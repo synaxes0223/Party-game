@@ -255,6 +255,10 @@ function setPlaybackButtons(state) {
 }
 
 socket.on("game:vote-progress", ({ voted, total }) => {
+  if (selectedGameId === "word-wolf") {
+    document.getElementById("word-round-status").textContent = `${voted} / ${total} players voted`;
+    return;
+  }
   document.getElementById("progress-text").textContent = `${voted} / ${total} players voted`;
   document.getElementById("progress-fill").style.width = `${(voted / total) * 100}%`;
 });
