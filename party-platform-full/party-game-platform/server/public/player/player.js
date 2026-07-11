@@ -31,6 +31,9 @@ const screens = {
   xpAnswering: document.getElementById("screen-xp-answering"),
   xpReveal: document.getElementById("screen-xp-reveal"),
   xpResults: document.getElementById("screen-xp-results"),
+  ptbTicking: document.getElementById("screen-ptb-ticking"),
+  ptbBoom: document.getElementById("screen-ptb-boom"),
+  ptbResults: document.getElementById("screen-ptb-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -42,7 +45,7 @@ function roleLabel() {
 
 socket.on("room:game-selected", ({ gameId }) => {
   currentGameId = gameId;
-  const usesPromptPipeline = gameId === "who-wrote-that" || gameId === "x-people";
+  const usesPromptPipeline = gameId === "who-wrote-that" || gameId === "x-people" || gameId === "pass-the-bomb";
   document.getElementById("wwt-submit-widget").style.display = usesPromptPipeline ? "block" : "none";
 });
 
@@ -271,6 +274,50 @@ socket.on("game:count-reveal", ({ yesCount, playerCount, results }) => {
   showScreen("xpReveal");
 });
 
+// ---- Pass The Bomb: holder gets the giant PASS button, everyone else waits ----
+socket.on("game:bomb-started", ({ category, holderId }) => {
+  if (currentGameId !== "pass-the-bomb") return;
+  document.getElementById("ptb-category").textContent = category;
+  updatePtbHolderUi(holderId);
+  showScreen("ptbTicking");
+});
+
+socket.on("game:bomb-passed", ({ holderId }) => {
+  if (currentGameId !== "pass-the-bomb") return;
+  updatePtbHolderUi(holderId);
+});
+
+function updatePtbHolderUi(holderId) {
+  const iAmHolder = holderId === myId;
+  document.getElementById("btn-ptb-pass").style.display = iAmHolder ? "block" : "none";
+  document.getElementById("ptb-holder-status").textContent = iAmHolder
+    ? "🧨 You have the bomb!"
+    : "🧨 Someone else has the bomb";
+}
+
+document.getElementById("btn-ptb-pass").addEventListener("click", () => {
+  socket.emit("player:pass-bomb", { code: roomCode });
+});
+
+socket.on("game:bomb-exploded", ({ holderNickname }) => {
+  if (currentGameId !== "pass-the-bomb") return;
+  document.getElementById("ptb-boom-text").textContent = `${holderNickname} was holding the bomb!`;
+  showScreen("ptbBoom");
+});
+
+function renderPtbTallyPlayer(listEl, booms) {
+  listEl.innerHTML = "";
+  booms
+    .slice()
+    .sort((a, b) => a.count - b.count)
+    .forEach((b) => {
+      const li = document.createElement("li");
+      const youTag = b.id === myId ? " (you)" : "";
+      li.innerHTML = `<span>${b.nickname}${youTag}</span><span>${b.count} 💥</span>`;
+      listEl.appendChild(li);
+    });
+}
+
 function renderWwtScoreboardPlayer(listEl, scores) {
   listEl.innerHTML = "";
   scores.forEach((s) => {
@@ -489,6 +536,18 @@ socket.on("game:round-results", (payload) => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (currentGameId === "pass-the-bomb") {
+    const { winners, booms } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    const youWon = winners.some((w) => w.id === myId);
+    document.getElementById("ptb-winner-text").textContent =
+      winners.length > 1
+        ? `🏆 Tied fewest booms: ${winnerNames}!`
+        : `🏆 ${winnerNames} had the fewest booms!${youWon ? " (you!)" : ""}`;
+    renderPtbTallyPlayer(document.getElementById("ptb-final-tally"), booms);
+    showScreen("ptbResults");
+    return;
+  }
   if (currentGameId === "x-people") {
     const { winners, scores } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");

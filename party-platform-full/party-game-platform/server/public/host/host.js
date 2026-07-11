@@ -25,6 +25,10 @@ const screens = {
   xpAnswering: document.getElementById("screen-xp-answering"),
   xpReveal: document.getElementById("screen-xp-reveal"),
   xpResults: document.getElementById("screen-xp-results"),
+  ptbPromptSelect: document.getElementById("screen-ptb-prompt-select"),
+  ptbTicking: document.getElementById("screen-ptb-ticking"),
+  ptbBoom: document.getElementById("screen-ptb-boom"),
+  ptbResults: document.getElementById("screen-ptb-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -110,6 +114,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
     enterWwtPromptSelect();
   } else if (selectedGameId === "x-people") {
     enterXpPromptSelect();
+  } else if (selectedGameId === "pass-the-bomb") {
+    enterPtbPromptSelect();
   } else {
     enterTrackSelect();
   }
@@ -121,6 +127,7 @@ socket.on("host:error", ({ error }) => {
   document.getElementById("word-select-error").textContent = error;
   document.getElementById("wwt-prompt-select-error").textContent = error;
   document.getElementById("xp-prompt-select-error").textContent = error;
+  document.getElementById("ptb-prompt-select-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -223,6 +230,7 @@ function enterWwtPromptSelect() {
 
 socket.on("game:prompt-select-ready", () => {
   if (selectedGameId === "x-people") enterXpPromptSelect();
+  else if (selectedGameId === "pass-the-bomb") enterPtbPromptSelect();
   else enterWwtPromptSelect();
 });
 
@@ -231,6 +239,8 @@ socket.on("game:prompt-sources", ({ aiAvailable }) => {
   document.getElementById("wwt-ai-controls").style.display = aiAvailable ? "block" : "none";
   document.getElementById("xp-ai-unavailable").style.display = aiAvailable ? "none" : "block";
   document.getElementById("xp-ai-controls").style.display = aiAvailable ? "block" : "none";
+  document.getElementById("ptb-ai-unavailable").style.display = aiAvailable ? "none" : "block";
+  document.getElementById("ptb-ai-controls").style.display = aiAvailable ? "block" : "none";
 });
 
 document.querySelectorAll(".spice-btn").forEach((btn) => {
@@ -240,6 +250,7 @@ document.querySelectorAll(".spice-btn").forEach((btn) => {
     const spice = Number(btn.dataset.spice);
     wwtSpice = spice;
     xpSpice = spice;
+    ptbSpice = spice;
     socket.emit("host:set-spice", { code: roomCode, spice });
   });
 });
@@ -286,6 +297,7 @@ document.getElementById("btn-approve-prompts").addEventListener("click", () => {
 socket.on("game:submission-count", ({ count }) => {
   document.getElementById("wwt-submission-count").textContent = count;
   document.getElementById("xp-submission-count").textContent = count;
+  document.getElementById("ptb-submission-count").textContent = count;
 });
 
 socket.on("game:prompt", ({ round, text }) => {
@@ -462,6 +474,125 @@ document.getElementById("btn-xp-play-again").addEventListener("click", () => {
   socket.emit("host:reset-room", { code: roomCode });
 });
 
+// ---- Pass The Bomb: prompt-select, ticking ring, boom, final tally ----
+let ptbSpice = 2;
+let ptbLastRound = 0;
+
+function enterPtbPromptSelect() {
+  document.getElementById("ptb-round-title").textContent = `Round ${ptbLastRound + 1}`;
+  document.getElementById("ptb-prompt-select-error").textContent = "";
+  document.getElementById("ptb-custom-prompt").value = "";
+  document.getElementById("ptb-ai-topic").value = "";
+  document.getElementById("ptb-ai-batch").innerHTML = "";
+  document.getElementById("btn-ptb-approve-prompts").style.display = "none";
+  document.querySelectorAll('.tab-btn[data-tab^="ptb-"]').forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll('.tab-panel[id^="tab-ptb-"]').forEach((p) => p.classList.remove("active"));
+  document.querySelector('.tab-btn[data-tab="ptb-draw"]').classList.add("active");
+  document.getElementById("tab-ptb-draw").classList.add("active");
+  showScreen("ptbPromptSelect");
+}
+
+document.getElementById("btn-ptb-draw-prompt").addEventListener("click", () => {
+  document.getElementById("ptb-prompt-select-error").textContent = "";
+  socket.emit("host:draw-prompt", { code: roomCode });
+});
+
+document.getElementById("btn-ptb-custom-prompt").addEventListener("click", () => {
+  document.getElementById("ptb-prompt-select-error").textContent = "";
+  const text = document.getElementById("ptb-custom-prompt").value.trim();
+  socket.emit("host:custom-prompt", { code: roomCode, text });
+});
+
+document.getElementById("btn-ptb-generate-prompts").addEventListener("click", () => {
+  document.getElementById("ptb-prompt-select-error").textContent = "";
+  const topic = document.getElementById("ptb-ai-topic").value.trim();
+  socket.emit("host:generate-prompts", { code: roomCode, topic, spice: ptbSpice, count: 10 });
+});
+
+socket.on("game:generated-prompts", ({ prompts }) => {
+  if (selectedGameId !== "pass-the-bomb") return;
+  const container = document.getElementById("ptb-ai-batch");
+  container.innerHTML = "";
+  prompts.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "ai-batch-row";
+    row.innerHTML = `<input type="checkbox" id="ptb-ai-prompt-${i}" checked /><span>${p.text}</span>`;
+    container.appendChild(row);
+  });
+  document.getElementById("btn-ptb-approve-prompts").style.display = prompts.length ? "block" : "none";
+  document.getElementById("btn-ptb-approve-prompts").dataset.prompts = JSON.stringify(prompts);
+});
+
+document.getElementById("btn-ptb-approve-prompts").addEventListener("click", () => {
+  const btn = document.getElementById("btn-ptb-approve-prompts");
+  const prompts = JSON.parse(btn.dataset.prompts || "[]");
+  const approved = prompts.filter((p, i) => document.getElementById(`ptb-ai-prompt-${i}`).checked);
+  socket.emit("host:approve-prompts", { code: roomCode, prompts: approved });
+  document.getElementById("ptb-ai-batch").innerHTML = "";
+  btn.style.display = "none";
+});
+
+let ptbHolderId = null;
+let ptbRing = [];
+
+function renderPtbRing() {
+  const container = document.getElementById("ptb-ring");
+  container.innerHTML = "";
+  ptbRing.forEach((p) => {
+    const el = document.createElement("div");
+    el.className = "ptb-ring-member" + (p.id === ptbHolderId ? " holding" : "");
+    el.textContent = (p.id === ptbHolderId ? "🧨 " : "") + p.nickname;
+    el.dataset.playerId = p.id;
+    container.appendChild(el);
+  });
+}
+
+socket.on("game:bomb-started", ({ round, category, ring, holderId }) => {
+  ptbLastRound = round;
+  ptbRing = ring;
+  ptbHolderId = holderId;
+  document.getElementById("ptb-round-title-active").textContent = `Round ${round} — Pass The Bomb`;
+  document.getElementById("ptb-category").textContent = category;
+  renderPtbRing();
+  showScreen("ptbTicking");
+});
+
+socket.on("game:bomb-passed", ({ holderId }) => {
+  ptbHolderId = holderId;
+  renderPtbRing();
+});
+
+function renderPtbTally(listEl, booms) {
+  listEl.innerHTML = "";
+  booms
+    .slice()
+    .sort((a, b) => a.count - b.count)
+    .forEach((b) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${b.nickname}</span><span>${b.count} 💥</span>`;
+      listEl.appendChild(li);
+    });
+}
+
+socket.on("game:bomb-exploded", ({ holderNickname, booms }) => {
+  document.getElementById("ptb-boom-text").textContent = `${holderNickname} was holding the bomb!`;
+  renderPtbTally(document.getElementById("ptb-boom-tally"), booms);
+  showScreen("ptbBoom");
+});
+
+document.getElementById("btn-ptb-next-round").addEventListener("click", () => {
+  socket.emit("host:next-round", { code: roomCode });
+});
+
+document.getElementById("btn-ptb-end-game").addEventListener("click", () => {
+  socket.emit("host:end-game", { code: roomCode });
+});
+
+document.getElementById("btn-ptb-play-again").addEventListener("click", () => {
+  selectedGameId = null;
+  socket.emit("host:reset-room", { code: roomCode });
+});
+
 // ---- Round start / playback ----
 socket.on("game:started", ({ round, playerCount }) => {
   hasStartedFirstRound = true;
@@ -566,6 +697,15 @@ document.getElementById("btn-next-round").addEventListener("click", () => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (selectedGameId === "pass-the-bomb") {
+    const { winners, booms } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    document.getElementById("ptb-winner-text").textContent =
+      winners.length > 1 ? `🏆 Tied fewest booms: ${winnerNames}!` : `🏆 ${winnerNames} had the fewest booms!`;
+    renderPtbTally(document.getElementById("ptb-final-tally"), booms);
+    showScreen("ptbResults");
+    return;
+  }
   if (selectedGameId === "x-people") {
     const { winners, scores } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");
@@ -620,6 +760,10 @@ socket.on("room:reset", ({ room }) => {
   wwtSpice = 2;
   xpLastRound = 0;
   xpSpice = 2;
+  ptbLastRound = 0;
+  ptbSpice = 2;
+  ptbHolderId = null;
+  ptbRing = [];
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");

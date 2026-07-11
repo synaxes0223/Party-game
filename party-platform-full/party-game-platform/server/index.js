@@ -232,6 +232,14 @@ io.on("connection", (socket) => {
     if (game && game.onSubmitResponse) game.onSubmitResponse(room, io, socket.id, answer, prediction);
   });
 
+  // ---- Pass The Bomb: holder passes the bomb along ----
+  socket.on("player:pass-bomb", ({ code }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game && game.onPassBomb) game.onPassBomb(room, io, socket.id);
+  });
+
   socket.on("host:end-game", ({ code }) => {
     withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
   });
@@ -314,6 +322,10 @@ io.on("connection", (socket) => {
   socket.on("host:reset-room", ({ code }) => {
     const room = roomService.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
+    if (room.gameId) {
+      const game = gameRegistry.getGame(room.gameId);
+      if (game && game.onReset) game.onReset(room);
+    }
     room.state = "lobby";
     room.gameId = null;
     room.gameState = null;

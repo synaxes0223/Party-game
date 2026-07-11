@@ -267,6 +267,73 @@
       <button type="button" id="btn-xp-play-again" class="btn-primary">Back to Lobby</button>
     </section>
 
+    <section id="screen-ptb-prompt-select" class="screen">
+      <h2 id="ptb-round-title">Round 1</h2>
+
+      <div class="spice-picker">
+        <span class="field-label">Spice level</span>
+        <div class="spice-tabs">
+          <button type="button" class="spice-btn" data-spice="1">😇 Chill</button>
+          <button type="button" class="spice-btn active" data-spice="2">🌶️ Spicy</button>
+          <button type="button" class="spice-btn" data-spice="3">🔥 玩真的</button>
+        </div>
+      </div>
+      <p class="hint"><span id="ptb-submission-count">0</span> player-submitted categories waiting</p>
+
+      <div class="source-tabs">
+        <button type="button" class="tab-btn active" data-tab="ptb-draw">Draw</button>
+        <button type="button" class="tab-btn" data-tab="ptb-custom">Custom</button>
+        <button type="button" class="tab-btn" data-tab="ptb-ai">AI Generate</button>
+      </div>
+
+      <div id="tab-ptb-draw" class="tab-panel active">
+        <button type="button" id="btn-ptb-draw-prompt" class="btn-primary">Draw Category</button>
+      </div>
+
+      <div id="tab-ptb-custom" class="tab-panel">
+        <label class="field-label">Custom category
+          <input id="ptb-custom-prompt" class="input-field" placeholder="e.g. Milo variants" />
+        </label>
+        <button type="button" id="btn-ptb-custom-prompt" class="btn-primary">Use This Category</button>
+      </div>
+
+      <div id="tab-ptb-ai" class="tab-panel">
+        <p id="ptb-ai-unavailable" class="hint" style="display:none;">AI generation isn't configured on this server.</p>
+        <div id="ptb-ai-controls">
+          <label class="field-label">Topic
+            <input id="ptb-ai-topic" class="input-field" placeholder="e.g. office snacks" />
+          </label>
+          <button type="button" id="btn-ptb-generate-prompts" class="btn-secondary">Generate</button>
+          <div id="ptb-ai-batch" class="ai-batch"></div>
+          <button type="button" id="btn-ptb-approve-prompts" class="btn-primary" style="display:none;">Approve Selected</button>
+        </div>
+      </div>
+
+      <p id="ptb-prompt-select-error" class="error"></p>
+    </section>
+
+    <section id="screen-ptb-ticking" class="screen">
+      <h2 id="ptb-round-title-active"></h2>
+      <p id="ptb-category" class="prompt-text"></p>
+      <div id="ptb-ring" class="ptb-ring"></div>
+    </section>
+
+    <section id="screen-ptb-boom" class="screen">
+      <h2>💥 BOOM!</h2>
+      <p id="ptb-boom-text" class="imposter-reveal"></p>
+      <h2>Boom Tally</h2>
+      <ul id="ptb-boom-tally" class="results-list"></ul>
+      <button type="button" id="btn-ptb-next-round" class="btn-primary">Next Round</button>
+      <button type="button" id="btn-ptb-end-game" class="btn-secondary">End Game</button>
+    </section>
+
+    <section id="screen-ptb-results" class="screen">
+      <h2>Final Booms</h2>
+      <p id="ptb-winner-text" class="imposter-reveal"></p>
+      <ul id="ptb-final-tally" class="results-list"></ul>
+      <button type="button" id="btn-ptb-play-again" class="btn-primary">Back to Lobby</button>
+    </section>
+
     <section id="screen-game" class="screen">
       <h2 id="game-title-active"></h2>
       <div id="game-progress" class="progress-box">
