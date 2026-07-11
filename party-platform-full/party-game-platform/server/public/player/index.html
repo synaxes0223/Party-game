@@ -155,6 +155,31 @@
       <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
+    <section id="screen-sm-missions" class="screen">
+      <h1>🎯 Your Missions</h1>
+      <p class="subtitle">Complete these in real life, sneakily. Claim when done.</p>
+      <div id="sm-my-missions" class="sm-my-missions"></div>
+
+      <h2>Accuse Someone</h2>
+      <select id="sm-accuse-player" class="input-field"></select>
+      <select id="sm-accuse-mission" class="input-field"></select>
+      <button id="btn-sm-accuse" class="btn-secondary">Accuse</button>
+      <p class="hint"><span id="sm-accusations-left">3</span> accusations left</p>
+      <p id="sm-accuse-status" class="hint"></p>
+
+      <h2>Mission Board</h2>
+      <div id="sm-public-board" class="sm-board-list"></div>
+    </section>
+
+    <section id="screen-sm-results" class="screen">
+      <h2>The Reveal</h2>
+      <p id="sm-winner-text" class="imposter-reveal"></p>
+      <div id="sm-reveal-list" class="sm-board-list"></div>
+      <h2>Final Scores</h2>
+      <ul id="sm-final-scoreboard" class="results-list"></ul>
+      <p class="hint">Waiting for host to return to the lobby…</p>
+    </section>
+
   </div>
 
   <div id="wwt-submit-widget" class="wwt-submit-widget" style="display:none;">

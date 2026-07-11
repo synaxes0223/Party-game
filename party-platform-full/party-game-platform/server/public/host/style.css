@@ -215,6 +215,20 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 }
 .ptb-ring-member.holding { border-color: var(--accent); background: rgba(255,95,162,0.18); }
 
+.sm-board-list { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+.sm-board-row {
+  background: var(--panel);
+  border-left: 4px solid transparent;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sm-board-row .status { color: var(--text-dim); font-size: 0.85rem; white-space: nowrap; }
+.sm-board-row.status-claimed { border-left-color: var(--success); }
+.sm-board-row.status-busted { border-left-color: var(--accent); opacity: 0.7; }
+
 .ai-batch { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .ai-batch-row {
   display: flex;

@@ -33,20 +33,41 @@ function getRoom(code) {
   return rooms.get((code || "").toUpperCase());
 }
 
-function joinRoom(code, socketId, nickname) {
+// `allowReconnect` is passed by index.js (which alone knows the selected
+// game's meta) -- roomService stays game-agnostic and never imports the
+// game registry. When true and the room is mid-game, a nickname match
+// against a `connected: false` player record reclaims that record onto the
+// new socketId instead of rejecting the join; an unrecognized nickname is
+// still rejected exactly as before.
+function joinRoom(code, socketId, nickname, { allowReconnect = false } = {}) {
   const room = getRoom(code);
   if (!room) return { error: "Room not found" };
-  if (room.state !== "lobby") return { error: "Game already in progress" };
 
   const trimmed = (nickname || "").trim().slice(0, 20);
   if (!trimmed) return { error: "Nickname required" };
+
+  if (room.state !== "lobby") {
+    if (!allowReconnect) return { error: "Game already in progress" };
+
+    const existingEntry = Array.from(room.players.entries()).find(
+      ([, p]) => p.connected === false && p.nickname.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!existingEntry) return { error: "Game already in progress" };
+
+    const [oldSocketId, player] = existingEntry;
+    room.players.delete(oldSocketId);
+    player.id = socketId;
+    player.connected = true;
+    room.players.set(socketId, player);
+    return { room, reclaimed: true, oldSocketId };
+  }
 
   const nameTaken = Array.from(room.players.values()).some(
     (p) => p.nickname.toLowerCase() === trimmed.toLowerCase()
   );
   if (nameTaken) return { error: "Nickname already taken in this room" };
 
-  room.players.set(socketId, { id: socketId, nickname: trimmed, ready: false });
+  room.players.set(socketId, { id: socketId, nickname: trimmed, ready: false, connected: true });
   return { room };
 }
 
@@ -58,6 +79,27 @@ function removePlayer(socketId) {
     }
   }
   return null;
+}
+
+function findRoomByPlayer(socketId) {
+  for (const room of rooms.values()) {
+    if (room.players.has(socketId)) return room;
+  }
+  return null;
+}
+
+// Soft-disconnect for reconnect-capable games: keeps the player record (and
+// the game's own per-player state, which is keyed off it) intact, just flags
+// it unreachable. Does NOT touch room.players.size, so removeRoomIfEmpty
+// never fires off this path -- that's deliberate, matching the "only clean
+// up when the host is gone too" rule (the host disconnecting still deletes
+// the room unconditionally, elsewhere).
+function markDisconnected(socketId) {
+  const room = findRoomByPlayer(socketId);
+  if (!room) return null;
+  const player = room.players.get(socketId);
+  if (player) player.connected = false;
+  return room;
 }
 
 function removeRoomIfEmpty(code) {
@@ -89,6 +131,7 @@ function publicRoomView(room) {
       id: p.id,
       nickname: p.nickname,
       ready: p.ready,
+      connected: p.connected !== false,
     })),
   };
 }
@@ -98,6 +141,8 @@ module.exports = {
   getRoom,
   joinRoom,
   removePlayer,
+  findRoomByPlayer,
+  markDisconnected,
   removeRoomIfEmpty,
   deleteRoom,
   findRoomByHost,

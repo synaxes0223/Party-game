@@ -12,7 +12,8 @@
     "test:e2e-audio": "node test/e2e-audio-sources.js",
     "test:e2e-who-wrote-that": "node test/e2e-who-wrote-that.js",
     "test:e2e-x-people": "node test/e2e-x-people.js",
-    "test:e2e-pass-the-bomb": "node test/e2e-pass-the-bomb.js"
+    "test:e2e-pass-the-bomb": "node test/e2e-pass-the-bomb.js",
+    "test:e2e-secret-missions": "node test/e2e-secret-missions.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

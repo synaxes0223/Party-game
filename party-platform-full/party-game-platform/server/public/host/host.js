@@ -29,6 +29,9 @@ const screens = {
   ptbTicking: document.getElementById("screen-ptb-ticking"),
   ptbBoom: document.getElementById("screen-ptb-boom"),
   ptbResults: document.getElementById("screen-ptb-results"),
+  smSetup: document.getElementById("screen-sm-setup"),
+  smBoard: document.getElementById("screen-sm-board"),
+  smResults: document.getElementById("screen-sm-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -116,6 +119,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
     enterXpPromptSelect();
   } else if (selectedGameId === "pass-the-bomb") {
     enterPtbPromptSelect();
+  } else if (selectedGameId === "secret-missions") {
+    enterSmSetup();
   } else {
     enterTrackSelect();
   }
@@ -128,6 +133,7 @@ socket.on("host:error", ({ error }) => {
   document.getElementById("wwt-prompt-select-error").textContent = error;
   document.getElementById("xp-prompt-select-error").textContent = error;
   document.getElementById("ptb-prompt-select-error").textContent = error;
+  document.getElementById("sm-setup-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -241,6 +247,7 @@ socket.on("game:prompt-sources", ({ aiAvailable }) => {
   document.getElementById("xp-ai-controls").style.display = aiAvailable ? "block" : "none";
   document.getElementById("ptb-ai-unavailable").style.display = aiAvailable ? "none" : "block";
   document.getElementById("ptb-ai-controls").style.display = aiAvailable ? "block" : "none";
+  document.getElementById("sm-ai-unavailable").style.display = aiAvailable ? "none" : "block";
 });
 
 document.querySelectorAll(".spice-btn").forEach((btn) => {
@@ -251,6 +258,7 @@ document.querySelectorAll(".spice-btn").forEach((btn) => {
     wwtSpice = spice;
     xpSpice = spice;
     ptbSpice = spice;
+    smSpice = spice;
     socket.emit("host:set-spice", { code: roomCode, spice });
   });
 });
@@ -593,6 +601,85 @@ document.getElementById("btn-ptb-play-again").addEventListener("click", () => {
   socket.emit("host:reset-room", { code: roomCode });
 });
 
+// ---- Secret Mission Bingo: setup, live board, reveal ----
+let smSpice = 3;
+
+function enterSmSetup() {
+  document.getElementById("sm-setup-error").textContent = "";
+  document.getElementById("sm-ai-topic").value = "";
+  document.getElementById("sm-ai-batch").innerHTML = "";
+  document.getElementById("btn-sm-approve-prompts").style.display = "none";
+  showScreen("smSetup");
+}
+
+document.getElementById("btn-sm-generate-prompts").addEventListener("click", () => {
+  document.getElementById("sm-setup-error").textContent = "";
+  const topic = document.getElementById("sm-ai-topic").value.trim();
+  socket.emit("host:generate-prompts", { code: roomCode, topic, spice: smSpice, count: 15 });
+});
+
+socket.on("game:generated-prompts", ({ prompts }) => {
+  if (selectedGameId !== "secret-missions") return;
+  const container = document.getElementById("sm-ai-batch");
+  container.innerHTML = "";
+  prompts.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "ai-batch-row";
+    row.innerHTML = `<input type="checkbox" id="sm-ai-prompt-${i}" checked /><span>${p.text}</span>`;
+    container.appendChild(row);
+  });
+  document.getElementById("btn-sm-approve-prompts").style.display = prompts.length ? "block" : "none";
+  document.getElementById("btn-sm-approve-prompts").dataset.prompts = JSON.stringify(prompts);
+});
+
+document.getElementById("btn-sm-approve-prompts").addEventListener("click", () => {
+  const btn = document.getElementById("btn-sm-approve-prompts");
+  const prompts = JSON.parse(btn.dataset.prompts || "[]");
+  const approved = prompts.filter((p, i) => document.getElementById(`sm-ai-prompt-${i}`).checked);
+  socket.emit("host:approve-prompts", { code: roomCode, prompts: approved });
+  document.getElementById("sm-ai-batch").innerHTML = "";
+  btn.style.display = "none";
+});
+
+document.getElementById("btn-sm-start-night").addEventListener("click", () => {
+  document.getElementById("sm-setup-error").textContent = "";
+  socket.emit("host:start-missions", { code: roomCode });
+});
+
+function renderSmBoard(listEl, missions) {
+  listEl.innerHTML = "";
+  const icons = { open: "⬜", claimed: "✅", busted: "💥" };
+  missions.forEach((m) => {
+    const row = document.createElement("div");
+    row.className = `sm-board-row status-${m.status}`;
+    row.innerHTML = `<span>${icons[m.status] || "⬜"} ${m.text}</span><span class="status">${m.status}</span>`;
+    listEl.appendChild(row);
+  });
+}
+
+socket.on("game:mission-board", ({ missions, scores }) => {
+  if (selectedGameId !== "secret-missions") return;
+  renderSmBoard(document.getElementById("sm-board-list"), missions);
+  renderWwtScoreboard(document.getElementById("sm-scoreboard"), scores);
+  showScreen("smBoard");
+});
+
+socket.on("game:accusation-result", ({ accuserNickname, targetNickname, hit }) => {
+  if (selectedGameId !== "secret-missions") return;
+  document.getElementById("sm-accusation-toast").textContent = hit
+    ? `🎯 ${accuserNickname} correctly busted ${targetNickname}!`
+    : `❌ ${accuserNickname} accused ${targetNickname} and missed.`;
+});
+
+document.getElementById("btn-sm-end-game").addEventListener("click", () => {
+  socket.emit("host:end-game", { code: roomCode });
+});
+
+document.getElementById("btn-sm-play-again").addEventListener("click", () => {
+  selectedGameId = null;
+  socket.emit("host:reset-room", { code: roomCode });
+});
+
 // ---- Round start / playback ----
 socket.on("game:started", ({ round, playerCount }) => {
   hasStartedFirstRound = true;
@@ -697,6 +784,23 @@ document.getElementById("btn-next-round").addEventListener("click", () => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (selectedGameId === "secret-missions") {
+    const { winners, reveal, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    document.getElementById("sm-winner-text").textContent =
+      winners.length > 1 ? `🏆 Tied: ${winnerNames}!` : `🏆 ${winnerNames} wins the night!`;
+    const revealList = document.getElementById("sm-reveal-list");
+    revealList.innerHTML = "";
+    reveal.forEach((m) => {
+      const row = document.createElement("div");
+      row.className = `sm-board-row status-${m.status}`;
+      row.innerHTML = `<span>${m.text}</span><span class="status">${m.ownerNickname} — ${m.status}</span>`;
+      revealList.appendChild(row);
+    });
+    renderWwtScoreboard(document.getElementById("sm-final-scoreboard"), scores);
+    showScreen("smResults");
+    return;
+  }
   if (selectedGameId === "pass-the-bomb") {
     const { winners, booms } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");
@@ -764,6 +868,7 @@ socket.on("room:reset", ({ room }) => {
   ptbSpice = 2;
   ptbHolderId = null;
   ptbRing = [];
+  smSpice = 3;
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");

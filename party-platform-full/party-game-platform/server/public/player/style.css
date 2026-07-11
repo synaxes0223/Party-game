@@ -226,6 +226,34 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
   line-height: 1;
 }
 
+.sm-my-missions { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 24px; }
+.sm-mission-card {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.sm-mission-card .text { flex: 1; }
+.sm-mission-card button { width: auto; padding: 10px 16px; font-size: 0.9rem; }
+
+.sm-board-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 24px; }
+.sm-board-row {
+  background: var(--panel);
+  border-left: 4px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+.sm-board-row .status { color: var(--text-dim); white-space: nowrap; }
+.sm-board-row.status-claimed { border-left-color: var(--success); }
+.sm-board-row.status-busted { border-left-color: var(--accent); opacity: 0.7; }
+
 .ptb-pass-btn {
   display: block;
   width: 100%;

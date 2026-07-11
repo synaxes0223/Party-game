@@ -34,6 +34,8 @@ const screens = {
   ptbTicking: document.getElementById("screen-ptb-ticking"),
   ptbBoom: document.getElementById("screen-ptb-boom"),
   ptbResults: document.getElementById("screen-ptb-results"),
+  smMissions: document.getElementById("screen-sm-missions"),
+  smResults: document.getElementById("screen-sm-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -78,12 +80,38 @@ function attemptJoin() {
 
 socket.on("player:join-error", ({ error }) => {
   document.getElementById("join-error").textContent = error;
+  // A stale saved session (e.g. the game ended, or this game doesn't support
+  // reconnect) shouldn't keep retrying silently -- drop it and let the user
+  // join fresh from the visible join screen.
+  localStorage.removeItem("partyGameSession");
 });
 
 socket.on("player:joined", ({ room }) => {
   roomCode = room.code;
   renderPlayerList(room.players);
+  const nicknameInput = document.getElementById("input-nickname").value.trim();
+  const savedNickname = JSON.parse(localStorage.getItem("partyGameSession") || "null")?.nickname;
+  localStorage.setItem(
+    "partyGameSession",
+    JSON.stringify({ code: room.code, nickname: nicknameInput || savedNickname || "" })
+  );
   showScreen("waiting");
+});
+
+// ---- Reconnect: silently retry a saved session on load, and re-sync
+// whenever the tab becomes visible again (phone unlocked, tab refocused) ----
+(function attemptSavedSessionRejoin() {
+  const saved = JSON.parse(localStorage.getItem("partyGameSession") || "null");
+  if (!saved || !saved.code || !saved.nickname) return;
+  socket.once("connect", () => {
+    socket.emit("player:join-room", { code: saved.code, nickname: saved.nickname });
+  });
+})();
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && roomCode) {
+    socket.emit("player:sync", { code: roomCode });
+  }
 });
 
 socket.on("room:player-list", ({ players }) => {
@@ -318,6 +346,99 @@ function renderPtbTallyPlayer(listEl, booms) {
     });
 }
 
+// ---- Secret Mission Bingo: your missions, live board, accusations ----
+let smLatestBoard = [];
+
+function renderSmMyMissions(missions) {
+  const container = document.getElementById("sm-my-missions");
+  container.innerHTML = "";
+  missions.forEach((m) => {
+    const row = document.createElement("div");
+    row.className = "sm-mission-card";
+    const claimBtn =
+      m.status === "open"
+        ? `<button class="btn-secondary" data-mission-id="${m.id}">Claim</button>`
+        : `<span class="hint">${m.status}</span>`;
+    row.innerHTML = `<span class="text">${m.text}</span>${claimBtn}`;
+    container.appendChild(row);
+  });
+  container.querySelectorAll("button[data-mission-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      socket.emit("player:claim-mission", { code: roomCode, missionId: btn.dataset.missionId });
+    });
+  });
+}
+
+socket.on("game:your-missions", ({ missions }) => {
+  if (currentGameId !== "secret-missions") return;
+  renderSmMyMissions(missions);
+  showScreen("smMissions");
+});
+
+function renderSmAccuseOptions() {
+  const playerSelect = document.getElementById("sm-accuse-player");
+  playerSelect.innerHTML = "";
+  currentPlayers
+    .filter((p) => p.id !== myId)
+    .forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.nickname;
+      playerSelect.appendChild(opt);
+    });
+
+  const missionSelect = document.getElementById("sm-accuse-mission");
+  missionSelect.innerHTML = "";
+  smLatestBoard
+    .filter((m) => m.status !== "busted")
+    .forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.text;
+      missionSelect.appendChild(opt);
+    });
+}
+
+socket.on("game:mission-board", ({ missions, accusationsLeft }) => {
+  if (currentGameId !== "secret-missions") return;
+  smLatestBoard = missions;
+
+  const container = document.getElementById("sm-public-board");
+  container.innerHTML = "";
+  const icons = { open: "⬜", claimed: "✅", busted: "💥" };
+  missions.forEach((m) => {
+    const row = document.createElement("div");
+    row.className = `sm-board-row status-${m.status}`;
+    row.innerHTML = `<span>${icons[m.status] || "⬜"} ${m.text}</span><span class="status">${m.status}</span>`;
+    container.appendChild(row);
+  });
+
+  renderSmAccuseOptions();
+
+  const mine = (accusationsLeft || []).find((a) => a.id === myId);
+  if (mine) document.getElementById("sm-accusations-left").textContent = mine.left;
+});
+
+document.getElementById("btn-sm-accuse").addEventListener("click", () => {
+  const targetPlayerId = document.getElementById("sm-accuse-player").value;
+  const missionId = document.getElementById("sm-accuse-mission").value;
+  if (!targetPlayerId || !missionId) return;
+  socket.emit("player:accuse", { code: roomCode, targetPlayerId, missionId });
+  document.getElementById("sm-accuse-status").textContent = "Accusation submitted…";
+});
+
+socket.on("game:accusation-result", ({ accuserNickname, targetNickname, hit }) => {
+  if (currentGameId !== "secret-missions") return;
+  document.getElementById("sm-accuse-status").textContent = hit
+    ? `🎯 ${accuserNickname} correctly busted ${targetNickname}!`
+    : `❌ ${accuserNickname} accused ${targetNickname} and missed.`;
+});
+
+socket.on("player:mission-action-rejected", ({ error }) => {
+  if (currentGameId !== "secret-missions") return;
+  document.getElementById("sm-accuse-status").textContent = error;
+});
+
 function renderWwtScoreboardPlayer(listEl, scores) {
   listEl.innerHTML = "";
   scores.forEach((s) => {
@@ -536,6 +657,24 @@ socket.on("game:round-results", (payload) => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (currentGameId === "secret-missions") {
+    const { winners, reveal, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    const youWon = winners.some((w) => w.id === myId);
+    document.getElementById("sm-winner-text").textContent =
+      winners.length > 1 ? `🏆 Tied: ${winnerNames}!` : `🏆 ${winnerNames} wins the night!${youWon ? " (you!)" : ""}`;
+    const revealList = document.getElementById("sm-reveal-list");
+    revealList.innerHTML = "";
+    reveal.forEach((m) => {
+      const row = document.createElement("div");
+      row.className = `sm-board-row status-${m.status}`;
+      row.innerHTML = `<span>${m.text}</span><span class="status">${m.ownerNickname} — ${m.status}</span>`;
+      revealList.appendChild(row);
+    });
+    renderWwtScoreboardPlayer(document.getElementById("sm-final-scoreboard"), scores);
+    showScreen("smResults");
+    return;
+  }
   if (currentGameId === "pass-the-bomb") {
     const { winners, booms } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");
@@ -602,6 +741,7 @@ socket.on("room:reset", ({ room }) => {
   document.getElementById("wwt-submit-widget").style.display = "none";
   document.getElementById("wwt-submit-panel").style.display = "none";
   document.getElementById("wwt-submit-status").textContent = "";
+  localStorage.removeItem("partyGameSession");
   showScreen("waiting");
 });
 

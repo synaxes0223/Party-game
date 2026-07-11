@@ -105,7 +105,11 @@ io.on("connection", (socket) => {
 
   // ---- PLAYER: join room ----
   socket.on("player:join-room", ({ code, nickname }) => {
-    const result = roomService.joinRoom(code, socket.id, nickname);
+    const existingRoom = roomService.getRoom(code);
+    const gameForReconnect = existingRoom && existingRoom.gameId ? gameRegistry.getGame(existingRoom.gameId) : null;
+    const allowReconnect = Boolean(gameForReconnect && gameForReconnect.meta.supportsReconnect);
+
+    const result = roomService.joinRoom(code, socket.id, nickname, { allowReconnect });
     if (result.error) {
       socket.emit("player:join-error", { error: result.error });
       return;
@@ -119,6 +123,10 @@ io.on("connection", (socket) => {
     io.in(room.code).emit("room:player-list", {
       players: roomService.publicRoomView(room).players,
     });
+
+    if (result.reclaimed && gameForReconnect && gameForReconnect.onPlayerReconnected) {
+      gameForReconnect.onPlayerReconnected(room, io, result.oldSocketId, socket.id);
+    }
   });
 
   // ---- HOST: select a game ----
@@ -240,6 +248,38 @@ io.on("connection", (socket) => {
     if (game && game.onPassBomb) game.onPassBomb(room, io, socket.id);
   });
 
+  // ---- Reconnect-capable games: re-request current state after a
+  // tab-switch/lock-screen reconnect ----
+  socket.on("player:sync", ({ code }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game && game.onPlayerSync) game.onPlayerSync(room, io, socket.id);
+  });
+
+  // ---- Secret Mission Bingo: deal missions, claim, accuse ----
+  socket.on("host:start-missions", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onStartMissions ? game.onStartMissions(room, io) : {}));
+  });
+
+  socket.on("player:claim-mission", ({ code, missionId }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.onClaimMission) return;
+    const result = game.onClaimMission(room, io, socket.id, missionId);
+    if (result && result.error) socket.emit("player:mission-action-rejected", { error: result.error });
+  });
+
+  socket.on("player:accuse", ({ code, targetPlayerId, missionId }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.onAccuse) return;
+    const result = game.onAccuse(room, io, socket.id, targetPlayerId, missionId);
+    if (result && result.error) socket.emit("player:mission-action-rejected", { error: result.error });
+  });
+
   socket.on("host:end-game", ({ code }) => {
     withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
   });
@@ -337,19 +377,36 @@ io.on("connection", (socket) => {
 
   // ---- Disconnect handling ----
   socket.on("disconnect", () => {
-    const room = roomService.removePlayer(socket.id);
-    if (room) {
-      if (room.gameId && room.gameState) {
-        const game = gameRegistry.getGame(room.gameId);
-        if (game.onPlayerLeft) game.onPlayerLeft(room, io, socket.id);
-      }
+    const roomBeforeRemoval = roomService.findRoomByPlayer(socket.id);
+    const gameForDisconnect =
+      roomBeforeRemoval && roomBeforeRemoval.gameId ? gameRegistry.getGame(roomBeforeRemoval.gameId) : null;
+    const softDisconnect = Boolean(
+      gameForDisconnect && gameForDisconnect.meta.supportsReconnect && roomBeforeRemoval.gameState
+    );
+
+    if (softDisconnect) {
+      const room = roomService.markDisconnected(socket.id);
       io.to(room.hostSocketId).emit("host:room-updated", {
         room: roomService.publicRoomView(room),
       });
       io.in(room.code).emit("room:player-list", {
         players: roomService.publicRoomView(room).players,
       });
-      roomService.removeRoomIfEmpty(room.code);
+    } else {
+      const room = roomService.removePlayer(socket.id);
+      if (room) {
+        if (room.gameId && room.gameState) {
+          const game = gameRegistry.getGame(room.gameId);
+          if (game.onPlayerLeft) game.onPlayerLeft(room, io, socket.id);
+        }
+        io.to(room.hostSocketId).emit("host:room-updated", {
+          room: roomService.publicRoomView(room),
+        });
+        io.in(room.code).emit("room:player-list", {
+          players: roomService.publicRoomView(room).players,
+        });
+        roomService.removeRoomIfEmpty(room.code);
+      }
     }
 
     const hostedRoom = roomService.findRoomByHost(socket.id);
