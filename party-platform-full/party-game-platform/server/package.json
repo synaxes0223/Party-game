@@ -9,9 +9,11 @@
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e-rounds.js",
     "test:e2e-word-wolf": "node test/e2e-word-wolf.js",
-    "test:e2e-audio": "node test/e2e-audio-sources.js"
+    "test:e2e-audio": "node test/e2e-audio-sources.js",
+    "test:e2e-who-wrote-that": "node test/e2e-who-wrote-that.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
     "socket.io": "^4.7.5"

@@ -14,6 +14,8 @@ const { Server } = require("socket.io");
 const roomService = require("./roomService");
 const gameRegistry = require("./games/registry");
 const uploadStore = require("./games/uploadStore");
+const promptLogic = require("./games/promptLogic");
+const aiPromptService = require("./games/aiPromptService");
 
 const app = express();
 const server = http.createServer(app);
@@ -134,6 +136,96 @@ io.on("connection", (socket) => {
     if (game.getTrackPairs) {
       socket.emit("game:track-pairs", { pairs: game.getTrackPairs() });
     }
+    if (game.meta.usesPromptPipeline) {
+      if (game.initGameState) game.initGameState(room);
+      socket.emit("game:prompt-sources", { aiAvailable: aiPromptService.isAvailable() });
+    }
+  });
+
+  // ---- HOST: prompt pipeline -- spice level, drawing, custom prompts ----
+  socket.on("host:set-spice", ({ code, spice }) => {
+    withHostGame(socket, code, (room, game) => (game.onSetSpice ? game.onSetSpice(room, io, Number(spice)) : {}));
+  });
+
+  socket.on("host:draw-prompt", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onDrawPrompt ? game.onDrawPrompt(room, io) : {}));
+  });
+
+  socket.on("host:custom-prompt", ({ code, text }) => {
+    withHostGame(socket, code, (room, game) => (game.onCustomPrompt ? game.onCustomPrompt(room, io, text) : {}));
+  });
+
+  // ---- PLAYER: secretly submit a prompt for future rounds ----
+  socket.on("player:submit-prompt", ({ code, text }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.meta.usesPromptPipeline || !game.onPromptSubmitted) return;
+    const result = game.onPromptSubmitted(room, io, socket.id, text);
+    if (result && result.error) socket.emit("player:prompt-rejected", { error: result.error });
+    else socket.emit("player:prompt-accepted", {});
+  });
+
+  // ---- HOST: AI prompt generation (topic -> batch -> host approves) ----
+  socket.on("host:generate-prompts", async ({ code, topic, spice, count }) => {
+    const room = roomService.getRoom(code);
+    if (!room || room.hostSocketId !== socket.id) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.meta.usesPromptPipeline) return;
+
+    const result = await aiPromptService.generatePrompts({
+      gameId: game.meta.id,
+      topic,
+      spice: Number(spice),
+      count: Number(count),
+    });
+    if (result.error) socket.emit("host:error", { error: result.error });
+    else socket.emit("game:generated-prompts", { prompts: result.prompts });
+  });
+
+  socket.on("host:approve-prompts", ({ code, prompts }) => {
+    const room = roomService.getRoom(code);
+    if (!room || room.hostSocketId !== socket.id) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.meta.usesPromptPipeline || !room.gameState) return;
+
+    const ps = room.gameState.promptState;
+    (prompts || []).forEach((p) => {
+      const validated = promptLogic.validateSubmission(p.text);
+      if (validated.error) return;
+      const insertAt = Math.floor(Math.random() * (ps.queue.length + 1));
+      ps.queue.splice(insertAt, 0, { text: validated.text, spice: p.spice, source: "ai" });
+    });
+    socket.emit("game:submission-count", { count: ps.queue.length });
+  });
+
+  // ---- Who Wrote That?: answering, guessing, round/game flow ----
+  socket.on("player:submit-answer", ({ code, text }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (!game || !game.onSubmitAnswer) return;
+    const result = game.onSubmitAnswer(room, io, socket.id, text);
+    if (result && result.error) socket.emit("player:answer-rejected", { error: result.error });
+  });
+
+  socket.on("host:force-answers", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onForceAnswers ? game.onForceAnswers(room, io) : {}));
+  });
+
+  socket.on("player:vote-author", ({ code, votedForId }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game && game.onVoteAuthor) game.onVoteAuthor(room, io, socket.id, votedForId);
+  });
+
+  socket.on("host:next-answer", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onNextAnswer ? game.onNextAnswer(room, io) : {}));
+  });
+
+  socket.on("host:end-game", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
   });
 
   // ---- HOST: pick a track pair (also starts the round) ----

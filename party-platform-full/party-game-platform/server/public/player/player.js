@@ -23,6 +23,11 @@ const screens = {
   roundResults: document.getElementById("screen-round-results"),
   spectator: document.getElementById("screen-spectator"),
   results: document.getElementById("screen-results"),
+  wwtAnswering: document.getElementById("screen-wwt-answering"),
+  wwtGuessing: document.getElementById("screen-wwt-guessing"),
+  wwtReveal: document.getElementById("screen-wwt-reveal"),
+  wwtRoundResults: document.getElementById("screen-wwt-round-results"),
+  wwtResults: document.getElementById("screen-wwt-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -34,6 +39,7 @@ function roleLabel() {
 
 socket.on("room:game-selected", ({ gameId }) => {
   currentGameId = gameId;
+  document.getElementById("wwt-submit-widget").style.display = gameId === "who-wrote-that" ? "block" : "none";
 });
 
 function showScreen(name) {
@@ -90,6 +96,114 @@ document.getElementById("btn-start-voting").addEventListener("click", () => {
   showScreen("playing");
   document.getElementById("vote-status").textContent = "";
 });
+
+// ---- Who Wrote That?: persistent prompt-submission widget ----
+document.getElementById("btn-toggle-submit-prompt").addEventListener("click", () => {
+  const panel = document.getElementById("wwt-submit-panel");
+  panel.style.display = panel.style.display === "block" ? "none" : "block";
+});
+
+document.getElementById("btn-submit-prompt").addEventListener("click", () => {
+  const input = document.getElementById("wwt-submit-input");
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit("player:submit-prompt", { code: roomCode, text });
+});
+
+socket.on("player:prompt-accepted", () => {
+  document.getElementById("wwt-submit-input").value = "";
+  document.getElementById("wwt-submit-status").textContent = "Sent! It'll show up in a future round.";
+});
+
+socket.on("player:prompt-rejected", ({ error }) => {
+  document.getElementById("wwt-submit-status").textContent = error;
+});
+
+// ---- Who Wrote That?: answering ----
+let wwtAnswerSubmitted = false;
+
+socket.on("game:prompt", ({ text }) => {
+  wwtAnswerSubmitted = false;
+  document.getElementById("wwt-prompt-text").textContent = text;
+  document.getElementById("wwt-answer-input").value = "";
+  document.getElementById("wwt-answer-input").disabled = false;
+  document.getElementById("btn-submit-answer").disabled = false;
+  document.getElementById("wwt-answer-status").textContent = "";
+  showScreen("wwtAnswering");
+});
+
+document.getElementById("btn-submit-answer").addEventListener("click", () => {
+  const text = document.getElementById("wwt-answer-input").value.trim();
+  if (!text) return;
+  socket.emit("player:submit-answer", { code: roomCode, text });
+  wwtAnswerSubmitted = true;
+  document.getElementById("wwt-answer-status").textContent = "Answer submitted — you can still edit it until everyone's in.";
+});
+
+socket.on("player:answer-rejected", ({ error }) => {
+  document.getElementById("wwt-answer-status").textContent = error;
+});
+
+// ---- Who Wrote That?: guessing ----
+let wwtSelectedVote = null;
+
+socket.on("game:show-answer", ({ text }) => {
+  wwtSelectedVote = null;
+  document.getElementById("wwt-shown-answer").textContent = text;
+  document.getElementById("wwt-vote-status").textContent = "";
+  document.getElementById("btn-wwt-confirm-vote").disabled = true;
+  renderWwtVoteOptions();
+  showScreen("wwtGuessing");
+});
+
+function renderWwtVoteOptions() {
+  const container = document.getElementById("wwt-vote-list");
+  container.innerHTML = "";
+  const candidates = currentPlayers.filter((p) => p.id !== myId);
+  candidates.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.className = "vote-btn";
+    btn.textContent = p.nickname;
+    btn.addEventListener("click", () => {
+      wwtSelectedVote = p.id;
+      document.querySelectorAll("#wwt-vote-list .vote-btn").forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      document.getElementById("btn-wwt-confirm-vote").disabled = false;
+    });
+    container.appendChild(btn);
+  });
+}
+
+document.getElementById("btn-wwt-confirm-vote").addEventListener("click", () => {
+  if (!wwtSelectedVote) return;
+  socket.emit("player:vote-author", { code: roomCode, votedForId: wwtSelectedVote });
+  document.querySelectorAll("#wwt-vote-list .vote-btn").forEach((b) => (b.disabled = true));
+  document.getElementById("btn-wwt-confirm-vote").disabled = true;
+  document.getElementById("wwt-vote-status").textContent = "Guess submitted — waiting for others…";
+});
+
+// ---- Who Wrote That?: reveal, round results, final results ----
+socket.on("game:answer-reveal", ({ authorNickname, text, correctGuessers, fooledCount, authorBonus, voided }) => {
+  document.getElementById("wwt-reveal-text").textContent = text;
+  if (voided) {
+    document.getElementById("wwt-reveal-detail").textContent = `${authorNickname} disconnected — voided, no points.`;
+  } else {
+    const guesserNames = correctGuessers.map((g) => g.nickname).join(", ") || "nobody";
+    document.getElementById("wwt-reveal-detail").textContent =
+      `Written by ${authorNickname}. Correctly guessed by: ${guesserNames}. Fooled ${fooledCount} — +${authorBonus} bonus.`;
+  }
+  showScreen("wwtReveal");
+});
+
+function renderWwtScoreboardPlayer(listEl, scores) {
+  listEl.innerHTML = "";
+  scores.forEach((s) => {
+    const li = document.createElement("li");
+    const youTag = s.id === myId ? " (you)" : "";
+    li.innerHTML = `<span>${s.nickname}${youTag}</span><span>${s.score}</span>`;
+    listEl.appendChild(li);
+  });
+}
 
 function renderPlayerList(players) {
   const list = document.getElementById("player-list");
@@ -257,13 +371,25 @@ document.getElementById("btn-confirm-vote").addEventListener("click", () => {
 });
 
 socket.on("player:vote-rejected", ({ reason }) => {
+  if (currentGameId === "who-wrote-that") {
+    document.getElementById("wwt-vote-status").textContent = reason || "That guess couldn't be submitted — pick again.";
+    document.querySelectorAll("#wwt-vote-list .vote-btn").forEach((b) => (b.disabled = false));
+    return;
+  }
   selectedVoteTarget = null;
   renderVoteOptions(currentPlayers);
   document.getElementById("vote-status").textContent = reason || "That vote couldn't be submitted — pick again.";
 });
 
 // ---- Round results ----
-socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) => {
+socket.on("game:round-results", (payload) => {
+  if (currentGameId === "who-wrote-that") {
+    renderWwtScoreboardPlayer(document.getElementById("wwt-round-scoreboard"), payload.scores);
+    showScreen("wwtRoundResults");
+    return;
+  }
+
+  const { eliminated, wasImposter, remainingActive } = payload;
   const role = roleLabel();
   const text = eliminated
     ? `${eliminated.nickname}${eliminated.id === myId ? " (you)" : ""} was voted out — ${wasImposter ? "they were" : "they were NOT"} the ${role}. ${remainingActive} players remain.`
@@ -286,7 +412,19 @@ socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) =
 });
 
 // ---- Final results ----
-socket.on("game:results", ({ imposter, winner, results }) => {
+socket.on("game:results", (payload) => {
+  if (currentGameId === "who-wrote-that") {
+    const { winners, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    const youWon = winners.some((w) => w.id === myId);
+    document.getElementById("wwt-winner-text").textContent =
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
+    renderWwtScoreboardPlayer(document.getElementById("wwt-final-scoreboard"), scores);
+    showScreen("wwtResults");
+    return;
+  }
+
+  const { imposter, winner, results } = payload;
   const role = roleLabel();
   const emoji = role === "wolf" ? "🐺" : "🎭";
   const winnerText = winner === "crew"
@@ -316,6 +454,9 @@ socket.on("room:reset", ({ room }) => {
   currentGameId = null;
   renderPlayerList(room.players);
   document.getElementById("btn-ready").disabled = false;
+  document.getElementById("wwt-submit-widget").style.display = "none";
+  document.getElementById("wwt-submit-panel").style.display = "none";
+  document.getElementById("wwt-submit-status").textContent = "";
   showScreen("waiting");
 });
 

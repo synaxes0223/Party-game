@@ -67,6 +67,51 @@
       <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
+    <section id="screen-wwt-answering" class="screen">
+      <h1>✍️ Answer this</h1>
+      <p id="wwt-prompt-text" class="prompt-text"></p>
+      <input id="wwt-answer-input" class="input-field" placeholder="Your anonymous answer…" maxlength="140" />
+      <button id="btn-submit-answer" class="btn-primary">Submit Answer</button>
+      <p id="wwt-answer-status" class="hint"></p>
+    </section>
+
+    <section id="screen-wwt-guessing" class="screen">
+      <h1>🕵️ Who wrote this?</h1>
+      <p id="wwt-shown-answer" class="prompt-text"></p>
+      <div id="wwt-vote-list" class="vote-list"></div>
+      <button id="btn-wwt-confirm-vote" class="btn-primary" disabled>Confirm Guess</button>
+      <p id="wwt-vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-wwt-reveal" class="screen">
+      <h2>Reveal</h2>
+      <p id="wwt-reveal-text" class="prompt-text"></p>
+      <p id="wwt-reveal-detail" class="hint"></p>
+      <p class="hint">Waiting for the host to continue…</p>
+    </section>
+
+    <section id="screen-wwt-round-results" class="screen">
+      <h2>Scoreboard</h2>
+      <ul id="wwt-round-scoreboard" class="results-list"></ul>
+      <p class="hint">Waiting for the host to continue…</p>
+    </section>
+
+    <section id="screen-wwt-results" class="screen">
+      <h2>Final Scores</h2>
+      <p id="wwt-winner-text" class="imposter-reveal"></p>
+      <ul id="wwt-final-scoreboard" class="results-list"></ul>
+      <p class="hint">Waiting for host to return to the lobby…</p>
+    </section>
+
+  </div>
+
+  <div id="wwt-submit-widget" class="wwt-submit-widget" style="display:none;">
+    <button id="btn-toggle-submit-prompt" class="btn-secondary">✍️ Submit a prompt</button>
+    <div id="wwt-submit-panel" class="wwt-submit-panel" style="display:none;">
+      <input id="wwt-submit-input" class="input-field" placeholder="Your secret prompt idea…" maxlength="200" />
+      <button id="btn-submit-prompt" class="btn-primary">Send</button>
+      <p id="wwt-submit-status" class="hint"></p>
+    </div>
   </div>
 
   <audio id="audio-player" preload="auto"></audio>

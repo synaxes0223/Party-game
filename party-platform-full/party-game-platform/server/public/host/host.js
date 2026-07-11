@@ -15,6 +15,12 @@ const screens = {
   wordRound: document.getElementById("screen-word-round"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
+  wwtPromptSelect: document.getElementById("screen-wwt-prompt-select"),
+  wwtAnswering: document.getElementById("screen-wwt-answering"),
+  wwtGuessing: document.getElementById("screen-wwt-guessing"),
+  wwtReveal: document.getElementById("screen-wwt-reveal"),
+  wwtRoundResults: document.getElementById("screen-wwt-round-results"),
+  wwtResults: document.getElementById("screen-wwt-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -96,6 +102,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
   document.getElementById("lobby-error").textContent = "";
   if (selectedGameId === "word-wolf") {
     enterWordSelect();
+  } else if (selectedGameId === "who-wrote-that") {
+    enterWwtPromptSelect();
   } else {
     enterTrackSelect();
   }
@@ -105,6 +113,7 @@ socket.on("host:error", ({ error }) => {
   document.getElementById("lobby-error").textContent = error;
   document.getElementById("track-select-error").textContent = error;
   document.getElementById("word-select-error").textContent = error;
+  document.getElementById("wwt-prompt-select-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -187,6 +196,146 @@ document.getElementById("btn-reveal-words").addEventListener("click", () => {
   document.getElementById("btn-reveal-words").style.display = "none";
 });
 
+// ---- Who Wrote That?: prompt-select, answering, guessing, reveal, scores ----
+let wwtSpice = 2;
+let wwtLastRound = 0;
+
+function enterWwtPromptSelect() {
+  document.getElementById("wwt-round-title").textContent = `Round ${wwtLastRound + 1}`;
+  document.getElementById("wwt-prompt-select-error").textContent = "";
+  document.getElementById("wwt-custom-prompt").value = "";
+  document.getElementById("wwt-ai-topic").value = "";
+  document.getElementById("wwt-ai-batch").innerHTML = "";
+  document.getElementById("btn-approve-prompts").style.display = "none";
+  document.querySelectorAll('.tab-btn[data-tab^="wwt-"]').forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll('.tab-panel[id^="tab-wwt-"]').forEach((p) => p.classList.remove("active"));
+  document.querySelector('.tab-btn[data-tab="wwt-draw"]').classList.add("active");
+  document.getElementById("tab-wwt-draw").classList.add("active");
+  showScreen("wwtPromptSelect");
+}
+
+socket.on("game:prompt-select-ready", () => {
+  enterWwtPromptSelect();
+});
+
+socket.on("game:prompt-sources", ({ aiAvailable }) => {
+  document.getElementById("wwt-ai-unavailable").style.display = aiAvailable ? "none" : "block";
+  document.getElementById("wwt-ai-controls").style.display = aiAvailable ? "block" : "none";
+});
+
+document.querySelectorAll(".spice-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    wwtSpice = Number(btn.dataset.spice);
+    socket.emit("host:set-spice", { code: roomCode, spice: wwtSpice });
+  });
+});
+
+document.getElementById("btn-draw-prompt").addEventListener("click", () => {
+  document.getElementById("wwt-prompt-select-error").textContent = "";
+  socket.emit("host:draw-prompt", { code: roomCode });
+});
+
+document.getElementById("btn-custom-prompt").addEventListener("click", () => {
+  document.getElementById("wwt-prompt-select-error").textContent = "";
+  const text = document.getElementById("wwt-custom-prompt").value.trim();
+  socket.emit("host:custom-prompt", { code: roomCode, text });
+});
+
+document.getElementById("btn-generate-prompts").addEventListener("click", () => {
+  document.getElementById("wwt-prompt-select-error").textContent = "";
+  const topic = document.getElementById("wwt-ai-topic").value.trim();
+  socket.emit("host:generate-prompts", { code: roomCode, topic, spice: wwtSpice, count: 10 });
+});
+
+socket.on("game:generated-prompts", ({ prompts }) => {
+  const container = document.getElementById("wwt-ai-batch");
+  container.innerHTML = "";
+  prompts.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "ai-batch-row";
+    row.innerHTML = `<input type="checkbox" id="ai-prompt-${i}" checked /><span>${p.text}</span>`;
+    container.appendChild(row);
+  });
+  document.getElementById("btn-approve-prompts").style.display = prompts.length ? "block" : "none";
+  document.getElementById("btn-approve-prompts").dataset.prompts = JSON.stringify(prompts);
+});
+
+document.getElementById("btn-approve-prompts").addEventListener("click", () => {
+  const btn = document.getElementById("btn-approve-prompts");
+  const prompts = JSON.parse(btn.dataset.prompts || "[]");
+  const approved = prompts.filter((p, i) => document.getElementById(`ai-prompt-${i}`).checked);
+  socket.emit("host:approve-prompts", { code: roomCode, prompts: approved });
+  document.getElementById("wwt-ai-batch").innerHTML = "";
+  btn.style.display = "none";
+});
+
+socket.on("game:submission-count", ({ count }) => {
+  document.getElementById("wwt-submission-count").textContent = count;
+});
+
+socket.on("game:prompt", ({ round, text }) => {
+  if (selectedGameId !== "who-wrote-that") return;
+  wwtLastRound = round;
+  document.getElementById("wwt-answering-title").textContent = `Round ${round} — Who Wrote That?`;
+  document.getElementById("wwt-answering-prompt").textContent = text;
+  showScreen("wwtAnswering");
+});
+
+socket.on("game:answer-progress", ({ answered, total }) => {
+  document.getElementById("wwt-answer-progress-text").textContent = `${answered} / ${total} players answered`;
+});
+
+document.getElementById("btn-force-answers").addEventListener("click", () => {
+  socket.emit("host:force-answers", { code: roomCode });
+});
+
+socket.on("game:show-answer", ({ answerNumber, totalAnswers, text }) => {
+  document.getElementById("wwt-answer-counter").textContent = `Answer ${answerNumber} of ${totalAnswers}`;
+  document.getElementById("wwt-current-answer").textContent = text;
+  document.getElementById("wwt-vote-progress-text").textContent = "0 votes in";
+  showScreen("wwtGuessing");
+});
+
+socket.on("game:answer-reveal", ({ authorNickname, text, correctGuessers, fooledCount, authorBonus, voided }) => {
+  document.getElementById("wwt-reveal-text").textContent = text;
+  if (voided) {
+    document.getElementById("wwt-reveal-detail").textContent = `${authorNickname} disconnected — this answer is voided, no points awarded.`;
+  } else {
+    const guesserNames = correctGuessers.map((g) => g.nickname).join(", ") || "nobody";
+    document.getElementById("wwt-reveal-detail").textContent =
+      `Written by ${authorNickname}. Correctly guessed by: ${guesserNames}. Fooled ${fooledCount} — +${authorBonus} bonus.`;
+  }
+  showScreen("wwtReveal");
+});
+
+document.getElementById("btn-next-answer").addEventListener("click", () => {
+  socket.emit("host:next-answer", { code: roomCode });
+});
+
+function renderWwtScoreboard(listEl, scores) {
+  listEl.innerHTML = "";
+  scores.forEach((s) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${s.nickname}</span><span>${s.score}</span>`;
+    listEl.appendChild(li);
+  });
+}
+
+document.getElementById("btn-wwt-next-round").addEventListener("click", () => {
+  socket.emit("host:next-round", { code: roomCode });
+});
+
+document.getElementById("btn-wwt-end-game").addEventListener("click", () => {
+  socket.emit("host:end-game", { code: roomCode });
+});
+
+document.getElementById("btn-wwt-play-again").addEventListener("click", () => {
+  selectedGameId = null;
+  socket.emit("host:reset-room", { code: roomCode });
+});
+
 // ---- Round start / playback ----
 socket.on("game:started", ({ round, playerCount }) => {
   hasStartedFirstRound = true;
@@ -255,6 +404,10 @@ function setPlaybackButtons(state) {
 }
 
 socket.on("game:vote-progress", ({ voted, total }) => {
+  if (selectedGameId === "who-wrote-that") {
+    document.getElementById("wwt-vote-progress-text").textContent = `${voted} / ${total} players voted`;
+    return;
+  }
   if (selectedGameId === "word-wolf") {
     document.getElementById("word-round-status").textContent = `${voted} / ${total} players voted`;
     return;
@@ -264,7 +417,13 @@ socket.on("game:vote-progress", ({ voted, total }) => {
 });
 
 // ---- Round results ----
-socket.on("game:round-results", ({ round, eliminated, wasImposter, remainingActive }) => {
+socket.on("game:round-results", (payload) => {
+  if (selectedGameId === "who-wrote-that") {
+    renderWwtScoreboard(document.getElementById("wwt-round-scoreboard"), payload.scores);
+    showScreen("wwtRoundResults");
+    return;
+  }
+  const { round, eliminated, wasImposter, remainingActive } = payload;
   activePlayerCount = remainingActive;
   document.getElementById("round-results-title").textContent = `Round ${round} Results`;
   const role = roleLabel();
@@ -280,7 +439,18 @@ document.getElementById("btn-next-round").addEventListener("click", () => {
 });
 
 // ---- Final results ----
-socket.on("game:results", ({ imposter, winner, results }) => {
+socket.on("game:results", (payload) => {
+  if (selectedGameId === "who-wrote-that") {
+    const { winners, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    document.getElementById("wwt-winner-text").textContent =
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!`;
+    renderWwtScoreboard(document.getElementById("wwt-final-scoreboard"), scores);
+    showScreen("wwtResults");
+    return;
+  }
+
+  const { imposter, winner, results } = payload;
   const role = roleLabel();
   const emoji = role === "wolf" ? "🐺" : "🎭";
   const winnerText = winner === "crew"
@@ -311,6 +481,8 @@ document.getElementById("btn-play-again").addEventListener("click", () => {
 socket.on("room:reset", ({ room }) => {
   hasStartedFirstRound = false;
   lastKnownRound = 0;
+  wwtLastRound = 0;
+  wwtSpice = 2;
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");
