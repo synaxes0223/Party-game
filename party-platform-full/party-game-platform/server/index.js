@@ -124,6 +124,16 @@ io.on("connection", (socket) => {
       players: roomService.publicRoomView(room).players,
     });
 
+    // A joining socket only just entered the socket.io room, so it never saw
+    // the original room:game-selected broadcast if the game was already
+    // picked before it connected (always true on a reconnect, since that
+    // only happens mid-game). Without this, the client's currentGameId stays
+    // null forever and every currentGameId-gated handler silently no-ops.
+    if (room.gameId) {
+      const currentGame = gameRegistry.getGame(room.gameId);
+      if (currentGame) socket.emit("room:game-selected", { gameId: room.gameId, meta: currentGame.meta });
+    }
+
     if (result.reclaimed && gameForReconnect && gameForReconnect.onPlayerReconnected) {
       gameForReconnect.onPlayerReconnected(room, io, result.oldSocketId, socket.id);
     }
