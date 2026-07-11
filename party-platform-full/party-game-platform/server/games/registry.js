@@ -7,11 +7,13 @@
 const findTheImposter = require("./findTheImposter");
 const wordWolf = require("./wordWolf");
 const whoWroteThat = require("./whoWroteThat");
+const xPeople = require("./xPeople");
 
 const GAMES = {
   [findTheImposter.meta.id]: findTheImposter,
   [wordWolf.meta.id]: wordWolf,
   [whoWroteThat.meta.id]: whoWroteThat,
+  [xPeople.meta.id]: xPeople,
 };
 
 function listGames() {

@@ -224,6 +224,14 @@ io.on("connection", (socket) => {
     withHostGame(socket, code, (room, game) => (game.onNextAnswer ? game.onNextAnswer(room, io) : {}));
   });
 
+  // ---- X People In This Room: private yes/no + prediction responses ----
+  socket.on("player:submit-response", ({ code, answer, prediction }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game && game.onSubmitResponse) game.onSubmitResponse(room, io, socket.id, answer, prediction);
+  });
+
   socket.on("host:end-game", ({ code }) => {
     withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
   });

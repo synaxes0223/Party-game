@@ -28,6 +28,9 @@ const screens = {
   wwtReveal: document.getElementById("screen-wwt-reveal"),
   wwtRoundResults: document.getElementById("screen-wwt-round-results"),
   wwtResults: document.getElementById("screen-wwt-results"),
+  xpAnswering: document.getElementById("screen-xp-answering"),
+  xpReveal: document.getElementById("screen-xp-reveal"),
+  xpResults: document.getElementById("screen-xp-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -39,7 +42,8 @@ function roleLabel() {
 
 socket.on("room:game-selected", ({ gameId }) => {
   currentGameId = gameId;
-  document.getElementById("wwt-submit-widget").style.display = gameId === "who-wrote-that" ? "block" : "none";
+  const usesPromptPipeline = gameId === "who-wrote-that" || gameId === "x-people";
+  document.getElementById("wwt-submit-widget").style.display = usesPromptPipeline ? "block" : "none";
 });
 
 function showScreen(name) {
@@ -123,6 +127,7 @@ socket.on("player:prompt-rejected", ({ error }) => {
 let wwtAnswerSubmitted = false;
 
 socket.on("game:prompt", ({ text }) => {
+  if (currentGameId !== "who-wrote-that") return;
   wwtAnswerSubmitted = false;
   document.getElementById("wwt-prompt-text").textContent = text;
   document.getElementById("wwt-answer-input").value = "";
@@ -193,6 +198,77 @@ socket.on("game:answer-reveal", ({ authorNickname, text, correctGuessers, fooled
       `Written by ${authorNickname}. Correctly guessed by: ${guesserNames}. Fooled ${fooledCount} — +${authorBonus} bonus.`;
   }
   showScreen("wwtReveal");
+});
+
+// ---- X People In This Room: yes/no + prediction, count reveal, scores ----
+let xpAnswer = null;
+let xpPrediction = 0;
+let xpMaxPrediction = 0;
+
+socket.on("game:prompt", ({ text, playerCount }) => {
+  if (currentGameId !== "x-people") return;
+  xpAnswer = null;
+  xpPrediction = 0;
+  xpMaxPrediction = playerCount;
+  document.getElementById("xp-prompt-text").textContent = text;
+  document.getElementById("xp-player-count").textContent = playerCount;
+  document.getElementById("xp-prediction-value").textContent = "0";
+  document.getElementById("xp-answer-status").textContent = "";
+  document.getElementById("btn-xp-submit").disabled = true;
+  document.querySelectorAll(".yesno-btn").forEach((b) => {
+    b.classList.remove("selected");
+    b.disabled = false;
+  });
+  showScreen("xpAnswering");
+});
+
+function updateXpSubmitEnabled() {
+  document.getElementById("btn-xp-submit").disabled = xpAnswer === null;
+}
+
+document.getElementById("btn-xp-yes").addEventListener("click", () => {
+  xpAnswer = true;
+  document.getElementById("btn-xp-yes").classList.add("selected");
+  document.getElementById("btn-xp-no").classList.remove("selected");
+  updateXpSubmitEnabled();
+});
+
+document.getElementById("btn-xp-no").addEventListener("click", () => {
+  xpAnswer = false;
+  document.getElementById("btn-xp-no").classList.add("selected");
+  document.getElementById("btn-xp-yes").classList.remove("selected");
+  updateXpSubmitEnabled();
+});
+
+document.getElementById("btn-xp-dec").addEventListener("click", () => {
+  xpPrediction = Math.max(0, xpPrediction - 1);
+  document.getElementById("xp-prediction-value").textContent = xpPrediction;
+});
+
+document.getElementById("btn-xp-inc").addEventListener("click", () => {
+  xpPrediction = Math.min(xpMaxPrediction, xpPrediction + 1);
+  document.getElementById("xp-prediction-value").textContent = xpPrediction;
+});
+
+document.getElementById("btn-xp-submit").addEventListener("click", () => {
+  if (xpAnswer === null) return;
+  socket.emit("player:submit-response", { code: roomCode, answer: xpAnswer, prediction: xpPrediction });
+  document.querySelectorAll(".yesno-btn").forEach((b) => (b.disabled = true));
+  document.getElementById("btn-xp-dec").disabled = true;
+  document.getElementById("btn-xp-inc").disabled = true;
+  document.getElementById("btn-xp-submit").disabled = true;
+  document.getElementById("xp-answer-status").textContent = "Submitted — waiting for others…";
+});
+
+socket.on("game:count-reveal", ({ yesCount, playerCount, results }) => {
+  if (currentGameId !== "x-people") return;
+  document.getElementById("xp-count-display").textContent = yesCount;
+  document.getElementById("xp-reveal-subtitle").textContent = `out of ${playerCount} players said yes`;
+  const mine = results.find((r) => r.id === myId);
+  document.getElementById("xp-my-result").textContent = mine
+    ? `You guessed ${mine.prediction} — +${mine.points} points`
+    : "";
+  showScreen("xpReveal");
 });
 
 function renderWwtScoreboardPlayer(listEl, scores) {
@@ -413,6 +489,16 @@ socket.on("game:round-results", (payload) => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (currentGameId === "x-people") {
+    const { winners, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    const youWon = winners.some((w) => w.id === myId);
+    document.getElementById("xp-winner-text").textContent =
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
+    renderWwtScoreboardPlayer(document.getElementById("xp-final-scoreboard"), scores);
+    showScreen("xpResults");
+    return;
+  }
   if (currentGameId === "who-wrote-that") {
     const { winners, scores } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");

@@ -21,6 +21,10 @@ const screens = {
   wwtReveal: document.getElementById("screen-wwt-reveal"),
   wwtRoundResults: document.getElementById("screen-wwt-round-results"),
   wwtResults: document.getElementById("screen-wwt-results"),
+  xpPromptSelect: document.getElementById("screen-xp-prompt-select"),
+  xpAnswering: document.getElementById("screen-xp-answering"),
+  xpReveal: document.getElementById("screen-xp-reveal"),
+  xpResults: document.getElementById("screen-xp-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -104,6 +108,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
     enterWordSelect();
   } else if (selectedGameId === "who-wrote-that") {
     enterWwtPromptSelect();
+  } else if (selectedGameId === "x-people") {
+    enterXpPromptSelect();
   } else {
     enterTrackSelect();
   }
@@ -114,6 +120,7 @@ socket.on("host:error", ({ error }) => {
   document.getElementById("track-select-error").textContent = error;
   document.getElementById("word-select-error").textContent = error;
   document.getElementById("wwt-prompt-select-error").textContent = error;
+  document.getElementById("xp-prompt-select-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -215,20 +222,25 @@ function enterWwtPromptSelect() {
 }
 
 socket.on("game:prompt-select-ready", () => {
-  enterWwtPromptSelect();
+  if (selectedGameId === "x-people") enterXpPromptSelect();
+  else enterWwtPromptSelect();
 });
 
 socket.on("game:prompt-sources", ({ aiAvailable }) => {
   document.getElementById("wwt-ai-unavailable").style.display = aiAvailable ? "none" : "block";
   document.getElementById("wwt-ai-controls").style.display = aiAvailable ? "block" : "none";
+  document.getElementById("xp-ai-unavailable").style.display = aiAvailable ? "none" : "block";
+  document.getElementById("xp-ai-controls").style.display = aiAvailable ? "block" : "none";
 });
 
 document.querySelectorAll(".spice-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    wwtSpice = Number(btn.dataset.spice);
-    socket.emit("host:set-spice", { code: roomCode, spice: wwtSpice });
+    const spice = Number(btn.dataset.spice);
+    wwtSpice = spice;
+    xpSpice = spice;
+    socket.emit("host:set-spice", { code: roomCode, spice });
   });
 });
 
@@ -273,9 +285,18 @@ document.getElementById("btn-approve-prompts").addEventListener("click", () => {
 
 socket.on("game:submission-count", ({ count }) => {
   document.getElementById("wwt-submission-count").textContent = count;
+  document.getElementById("xp-submission-count").textContent = count;
 });
 
 socket.on("game:prompt", ({ round, text }) => {
+  if (selectedGameId === "x-people") {
+    xpLastRound = round;
+    document.getElementById("xp-answering-title").textContent = `Round ${round} — X People In This Room`;
+    document.getElementById("xp-answering-prompt").textContent = text;
+    document.getElementById("xp-answer-progress-text").textContent = "0 / 0 players answered";
+    showScreen("xpAnswering");
+    return;
+  }
   if (selectedGameId !== "who-wrote-that") return;
   wwtLastRound = round;
   document.getElementById("wwt-answering-title").textContent = `Round ${round} — Who Wrote That?`;
@@ -284,6 +305,10 @@ socket.on("game:prompt", ({ round, text }) => {
 });
 
 socket.on("game:answer-progress", ({ answered, total }) => {
+  if (selectedGameId === "x-people") {
+    document.getElementById("xp-answer-progress-text").textContent = `${answered} / ${total} players answered`;
+    return;
+  }
   document.getElementById("wwt-answer-progress-text").textContent = `${answered} / ${total} players answered`;
 });
 
@@ -332,6 +357,107 @@ document.getElementById("btn-wwt-end-game").addEventListener("click", () => {
 });
 
 document.getElementById("btn-wwt-play-again").addEventListener("click", () => {
+  selectedGameId = null;
+  socket.emit("host:reset-room", { code: roomCode });
+});
+
+// ---- X People In This Room: prompt-select, answering, count reveal, scores ----
+let xpSpice = 2;
+let xpLastRound = 0;
+
+function enterXpPromptSelect() {
+  document.getElementById("xp-round-title").textContent = `Round ${xpLastRound + 1}`;
+  document.getElementById("xp-prompt-select-error").textContent = "";
+  document.getElementById("xp-custom-prompt").value = "";
+  document.getElementById("xp-ai-topic").value = "";
+  document.getElementById("xp-ai-batch").innerHTML = "";
+  document.getElementById("btn-xp-approve-prompts").style.display = "none";
+  document.querySelectorAll('.tab-btn[data-tab^="xp-"]').forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll('.tab-panel[id^="tab-xp-"]').forEach((p) => p.classList.remove("active"));
+  document.querySelector('.tab-btn[data-tab="xp-draw"]').classList.add("active");
+  document.getElementById("tab-xp-draw").classList.add("active");
+  showScreen("xpPromptSelect");
+}
+
+document.getElementById("btn-xp-draw-prompt").addEventListener("click", () => {
+  document.getElementById("xp-prompt-select-error").textContent = "";
+  socket.emit("host:draw-prompt", { code: roomCode });
+});
+
+document.getElementById("btn-xp-custom-prompt").addEventListener("click", () => {
+  document.getElementById("xp-prompt-select-error").textContent = "";
+  const text = document.getElementById("xp-custom-prompt").value.trim();
+  socket.emit("host:custom-prompt", { code: roomCode, text });
+});
+
+document.getElementById("btn-xp-generate-prompts").addEventListener("click", () => {
+  document.getElementById("xp-prompt-select-error").textContent = "";
+  const topic = document.getElementById("xp-ai-topic").value.trim();
+  socket.emit("host:generate-prompts", { code: roomCode, topic, spice: xpSpice, count: 10 });
+});
+
+socket.on("game:generated-prompts", ({ prompts }) => {
+  if (selectedGameId !== "x-people") return;
+  const container = document.getElementById("xp-ai-batch");
+  container.innerHTML = "";
+  prompts.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "ai-batch-row";
+    row.innerHTML = `<input type="checkbox" id="xp-ai-prompt-${i}" checked /><span>${p.text}</span>`;
+    container.appendChild(row);
+  });
+  document.getElementById("btn-xp-approve-prompts").style.display = prompts.length ? "block" : "none";
+  document.getElementById("btn-xp-approve-prompts").dataset.prompts = JSON.stringify(prompts);
+});
+
+document.getElementById("btn-xp-approve-prompts").addEventListener("click", () => {
+  const btn = document.getElementById("btn-xp-approve-prompts");
+  const prompts = JSON.parse(btn.dataset.prompts || "[]");
+  const approved = prompts.filter((p, i) => document.getElementById(`xp-ai-prompt-${i}`).checked);
+  socket.emit("host:approve-prompts", { code: roomCode, prompts: approved });
+  document.getElementById("xp-ai-batch").innerHTML = "";
+  btn.style.display = "none";
+});
+
+document.getElementById("btn-xp-force-answers").addEventListener("click", () => {
+  socket.emit("host:force-answers", { code: roomCode });
+});
+
+function renderXpScoreboard(listEl, scores) {
+  listEl.innerHTML = "";
+  scores.forEach((s) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${s.nickname}</span><span>${s.score}</span>`;
+    listEl.appendChild(li);
+  });
+}
+
+socket.on("game:count-reveal", ({ round, yesCount, playerCount, results, scores }) => {
+  document.getElementById("xp-reveal-title").textContent = `Round ${round} Reveal`;
+  document.getElementById("xp-count-display").textContent = yesCount;
+  document.getElementById("xp-reveal-subtitle").textContent = `out of ${playerCount} players said yes`;
+
+  const predictionList = document.getElementById("xp-prediction-results");
+  predictionList.innerHTML = "";
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${r.nickname} guessed ${r.prediction}</span><span>+${r.points}</span>`;
+    predictionList.appendChild(li);
+  });
+
+  renderXpScoreboard(document.getElementById("xp-scoreboard"), scores);
+  showScreen("xpReveal");
+});
+
+document.getElementById("btn-xp-next-round").addEventListener("click", () => {
+  socket.emit("host:next-round", { code: roomCode });
+});
+
+document.getElementById("btn-xp-end-game").addEventListener("click", () => {
+  socket.emit("host:end-game", { code: roomCode });
+});
+
+document.getElementById("btn-xp-play-again").addEventListener("click", () => {
   selectedGameId = null;
   socket.emit("host:reset-room", { code: roomCode });
 });
@@ -440,6 +566,15 @@ document.getElementById("btn-next-round").addEventListener("click", () => {
 
 // ---- Final results ----
 socket.on("game:results", (payload) => {
+  if (selectedGameId === "x-people") {
+    const { winners, scores } = payload;
+    const winnerNames = winners.map((w) => w.nickname).join(", ");
+    document.getElementById("xp-winner-text").textContent =
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!`;
+    renderXpScoreboard(document.getElementById("xp-final-scoreboard"), scores);
+    showScreen("xpResults");
+    return;
+  }
   if (selectedGameId === "who-wrote-that") {
     const { winners, scores } = payload;
     const winnerNames = winners.map((w) => w.nickname).join(", ");
@@ -483,6 +618,8 @@ socket.on("room:reset", ({ room }) => {
   lastKnownRound = 0;
   wwtLastRound = 0;
   wwtSpice = 2;
+  xpLastRound = 0;
+  xpSpice = 2;
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");

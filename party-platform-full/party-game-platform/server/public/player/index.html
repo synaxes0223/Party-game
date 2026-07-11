@@ -103,6 +103,39 @@
       <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
+    <section id="screen-xp-answering" class="screen">
+      <h1>🤫 Answer honestly</h1>
+      <p class="subtitle">Your answer is never shown to anyone — only the total count.</p>
+      <p id="xp-prompt-text" class="prompt-text"></p>
+      <div class="yesno-row">
+        <button id="btn-xp-yes" class="yesno-btn">YES</button>
+        <button id="btn-xp-no" class="yesno-btn">NO</button>
+      </div>
+      <label class="field-label">How many players (out of <span id="xp-player-count"></span>) do you think said yes?</label>
+      <div class="stepper-row">
+        <button id="btn-xp-dec" class="btn-secondary stepper-btn">−</button>
+        <span id="xp-prediction-value" class="stepper-value">0</span>
+        <button id="btn-xp-inc" class="btn-secondary stepper-btn">+</button>
+      </div>
+      <button id="btn-xp-submit" class="btn-primary" disabled>Submit</button>
+      <p id="xp-answer-status" class="hint"></p>
+    </section>
+
+    <section id="screen-xp-reveal" class="screen">
+      <h2 id="xp-reveal-title">Reveal</h2>
+      <p id="xp-count-display" class="count-display"></p>
+      <p id="xp-reveal-subtitle" class="hint"></p>
+      <p id="xp-my-result" class="imposter-reveal"></p>
+      <p class="hint">Waiting for the host to continue…</p>
+    </section>
+
+    <section id="screen-xp-results" class="screen">
+      <h2>Final Scores</h2>
+      <p id="xp-winner-text" class="imposter-reveal"></p>
+      <ul id="xp-final-scoreboard" class="results-list"></ul>
+      <p class="hint">Waiting for host to return to the lobby…</p>
+    </section>
+
   </div>
 
   <div id="wwt-submit-widget" class="wwt-submit-widget" style="display:none;">

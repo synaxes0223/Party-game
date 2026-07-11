@@ -195,6 +195,78 @@
       <button type="button" id="btn-wwt-play-again" class="btn-primary">Back to Lobby</button>
     </section>
 
+    <section id="screen-xp-prompt-select" class="screen">
+      <h2 id="xp-round-title">Round 1</h2>
+
+      <div class="spice-picker">
+        <span class="field-label">Spice level</span>
+        <div class="spice-tabs">
+          <button type="button" class="spice-btn" data-spice="1">😇 Chill</button>
+          <button type="button" class="spice-btn active" data-spice="2">🌶️ Spicy</button>
+          <button type="button" class="spice-btn" data-spice="3">🔥 玩真的</button>
+        </div>
+      </div>
+      <p class="hint"><span id="xp-submission-count">0</span> player-submitted questions waiting</p>
+
+      <div class="source-tabs">
+        <button type="button" class="tab-btn active" data-tab="xp-draw">Draw</button>
+        <button type="button" class="tab-btn" data-tab="xp-custom">Custom</button>
+        <button type="button" class="tab-btn" data-tab="xp-ai">AI Generate</button>
+      </div>
+
+      <div id="tab-xp-draw" class="tab-panel active">
+        <button type="button" id="btn-xp-draw-prompt" class="btn-primary">Draw Question</button>
+      </div>
+
+      <div id="tab-xp-custom" class="tab-panel">
+        <label class="field-label">Custom yes/no question
+          <input id="xp-custom-prompt" class="input-field" placeholder="e.g. Have you ever ghosted someone?" />
+        </label>
+        <button type="button" id="btn-xp-custom-prompt" class="btn-primary">Use This Question</button>
+      </div>
+
+      <div id="tab-xp-ai" class="tab-panel">
+        <p id="xp-ai-unavailable" class="hint" style="display:none;">AI generation isn't configured on this server.</p>
+        <div id="xp-ai-controls">
+          <label class="field-label">Topic
+            <input id="xp-ai-topic" class="input-field" placeholder="e.g. office life" />
+          </label>
+          <button type="button" id="btn-xp-generate-prompts" class="btn-secondary">Generate</button>
+          <div id="xp-ai-batch" class="ai-batch"></div>
+          <button type="button" id="btn-xp-approve-prompts" class="btn-primary" style="display:none;">Approve Selected</button>
+        </div>
+      </div>
+
+      <p id="xp-prompt-select-error" class="error"></p>
+    </section>
+
+    <section id="screen-xp-answering" class="screen">
+      <h2 id="xp-answering-title"></h2>
+      <p id="xp-answering-prompt" class="prompt-text"></p>
+      <div class="progress-box">
+        <p id="xp-answer-progress-text">0 / 0 players answered</p>
+      </div>
+      <button type="button" id="btn-xp-force-answers" class="btn-secondary">Reveal Now</button>
+    </section>
+
+    <section id="screen-xp-reveal" class="screen">
+      <h2 id="xp-reveal-title"></h2>
+      <p id="xp-count-display" class="count-display"></p>
+      <p id="xp-reveal-subtitle" class="hint"></p>
+      <ul id="xp-prediction-results" class="results-list"></ul>
+      <h2>Scoreboard</h2>
+      <ul id="xp-scoreboard" class="results-list"></ul>
+      <button type="button" id="btn-xp-next-round" class="btn-primary">Next Round</button>
+      <button type="button" id="btn-xp-end-game" class="btn-secondary">End Game</button>
+    </section>
+
+    <section id="screen-xp-results" class="screen">
+      <h2>Final Scores</h2>
+      <p id="xp-winner-text" class="imposter-reveal"></p>
+      <ul id="xp-final-scoreboard" class="results-list"></ul>
+      <button type="button" id="btn-xp-play-again" class="btn-primary">Back to Lobby</button>
+    </section>
+
     <section id="screen-game" class="screen">
       <h2 id="game-title-active"></h2>
       <div id="game-progress" class="progress-box">

@@ -195,6 +195,15 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
   margin: 16px 0;
 }
 
+.count-display {
+  text-align: center;
+  font-size: 5rem;
+  font-weight: 900;
+  color: var(--accent);
+  margin: 24px 0 8px;
+  line-height: 1;
+}
+
 .ai-batch { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .ai-batch-row {
   display: flex;
