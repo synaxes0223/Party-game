@@ -69,25 +69,54 @@ async function scenarioFullGame() {
   assertTrue(refereeView.players.length === 3, "referee view should list all 3 players");
   assertTrue(startScore.scores.every((s) => s.catchCount === 0), "all scores should start at 0");
 
-  // Cross-check: no player's own current entry ever appears in their own "others" list.
-  const entryById = new Map(refereeView.players.map((p) => [p.id, p.entry.id]));
-  players.forEach((p, i) => {
-    const myEntryId = entryById.get(p.socket.id);
-    const leaked = yourViews[i].others.some((o) => o.id === p.socket.id && o.entry.id === myEntryId);
-    assertTrue(!leaked, `${p.name} should never see their own entry in their own view`);
-  });
+  function assertNoSelfLeak(refView, viewsInOrder, label) {
+    const entryById = new Map(refView.players.map((p) => [p.id, p.entry.id]));
+    players.forEach((p, i) => {
+      const myEntryId = entryById.get(p.socket.id);
+      const leaked = viewsInOrder[i].others.some((o) => o.id === p.socket.id && o.entry.id === myEntryId);
+      assertTrue(!leaked, `${p.name} should never see their own entry in their own view (${label})`);
+    });
+  }
 
-  const targetPlayer = players[0];
-  const caughtPromise = once(targetPlayer.socket, "game:you-were-caught");
-  const nextScorePromise = once(host, "game:score-update");
-  host.emit("host:mark-caught", { code: roomCode, targetPlayerId: targetPlayer.socket.id });
-  await caughtPromise;
-  const afterCatchScore = await nextScorePromise;
-  const targetScore = afterCatchScore.scores.find((s) => s.id === targetPlayer.socket.id);
-  assertTrue(targetScore.catchCount === 1, "caught player's score should be 1 after one catch");
+  assertNoSelfLeak(refereeView, yourViews, "initial deal");
 
-  host.emit("host:mark-caught", { code: roomCode, targetPlayerId: targetPlayer.socket.id });
-  await once(host, "game:score-update");
+  // Catch player 0 (Alice); confirm reassignment doesn't leak, and that a
+  // PLAYER socket (not just the host) receives the live score update.
+  const target1 = players[0];
+  const caught1Promise = once(target1.socket, "game:you-were-caught");
+  const yourViewAfterCatch1Promises = players.map((p) => once(p.socket, "game:your-view"));
+  const refereeAfterCatch1Promise = once(host, "game:referee-view");
+  const hostScoreAfterCatch1Promise = once(host, "game:score-update");
+  const playerScoreAfterCatch1Promise = once(players[1].socket, "game:score-update");
+  host.emit("host:mark-caught", { code: roomCode, targetPlayerId: target1.socket.id });
+  await caught1Promise;
+  const yourViewsAfterCatch1 = await Promise.all(yourViewAfterCatch1Promises);
+  const refereeAfterCatch1 = await refereeAfterCatch1Promise;
+  const hostScoreAfterCatch1 = await hostScoreAfterCatch1Promise;
+  await playerScoreAfterCatch1Promise;
+
+  assertNoSelfLeak(refereeAfterCatch1, yourViewsAfterCatch1, "after catching player 1");
+  const target1Score = hostScoreAfterCatch1.scores.find((s) => s.id === target1.socket.id);
+  assertTrue(target1Score.catchCount === 1, "first caught player's score should be 1");
+
+  // Catch a DIFFERENT player (Bob) to confirm catches are tracked
+  // independently per player, not just for a single repeat offender.
+  const target2 = players[1];
+  const caught2Promise = once(target2.socket, "game:you-were-caught");
+  const yourViewAfterCatch2Promises = players.map((p) => once(p.socket, "game:your-view"));
+  const refereeAfterCatch2Promise = once(host, "game:referee-view");
+  const hostScoreAfterCatch2Promise = once(host, "game:score-update");
+  host.emit("host:mark-caught", { code: roomCode, targetPlayerId: target2.socket.id });
+  await caught2Promise;
+  const yourViewsAfterCatch2 = await Promise.all(yourViewAfterCatch2Promises);
+  const refereeAfterCatch2 = await refereeAfterCatch2Promise;
+  const hostScoreAfterCatch2 = await hostScoreAfterCatch2Promise;
+
+  assertNoSelfLeak(refereeAfterCatch2, yourViewsAfterCatch2, "after catching player 2");
+  const target1ScoreFinal = hostScoreAfterCatch2.scores.find((s) => s.id === target1.socket.id);
+  const target2ScoreFinal = hostScoreAfterCatch2.scores.find((s) => s.id === target2.socket.id);
+  assertTrue(target1ScoreFinal.catchCount === 1, "player 1 should still have exactly 1 catch");
+  assertTrue(target2ScoreFinal.catchCount === 1, "player 2 should have exactly 1 catch");
 
   const finalResultsPromises = [host, ...players.map((p) => p.socket)].map((s) => once(s, "game:final-results"));
   host.emit("host:end-game", { code: roomCode });
@@ -98,9 +127,10 @@ async function scenarioFullGame() {
     const counts = results.map((r) => r.catchCount);
     const sorted = [...counts].sort((a, b) => a - b);
     assertTrue(JSON.stringify(counts) === JSON.stringify(sorted), "final results should be sorted ascending");
+    const zeroCatchPlayer = results.find((r) => r.catchCount === 0);
     assertTrue(
-      results[results.length - 1].id === targetPlayer.socket.id,
-      "the twice-caught player should rank last"
+      zeroCatchPlayer && zeroCatchPlayer.id === players[2].socket.id,
+      "the never-caught player should have 0 catches"
     );
   });
 
