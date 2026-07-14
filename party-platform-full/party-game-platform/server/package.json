@@ -8,7 +8,8 @@
     "start": "node index.js",
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e-rounds.js",
-    "test:e2e-audio": "node test/e2e-audio-sources.js"
+    "test:e2e-audio": "node test/e2e-audio-sources.js",
+    "test:e2e-slipup": "node test/e2e-slip-up.js"
   },
   "dependencies": {
     "express": "^4.19.2",
