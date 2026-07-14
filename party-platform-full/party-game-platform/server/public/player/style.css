@@ -157,3 +157,11 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 
 .toast { display: none; text-align: center; background: var(--accent); color: var(--text); padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
 .toast.show { display: block; animation: fadein 0.3s ease; }
+
+.word-reveal-text {
+  text-align: center;
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 32px 0;
+}

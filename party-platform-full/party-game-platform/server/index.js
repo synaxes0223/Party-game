@@ -162,6 +162,19 @@ io.on("connection", (socket) => {
     });
   });
 
+  // ---- HOST: Word Wolf word selection ----
+  socket.on("host:select-auto-pair", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onSelectAutoPair(room, io));
+  });
+
+  socket.on("host:select-custom-pair", ({ code, normalWord, imposterWord }) => {
+    withHostGame(socket, code, (room, game) => game.onSelectCustomPair(room, io, { normalWord, imposterWord }));
+  });
+
+  socket.on("host:reveal-words", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostReveal(room, io));
+  });
+
   // ---- HOST: playback control ----
   socket.on("host:play-audio", ({ code }) => {
     withHostGame(socket, code, (room, game) => game.onHostPlay(room, io));

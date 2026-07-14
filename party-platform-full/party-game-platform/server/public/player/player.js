@@ -12,17 +12,30 @@ let iAmEliminated = false;
 // The server silently drops such a vote (no error emitted back), and since
 // voting has no timer, that would hang the round forever with no recovery.
 let eliminatedPlayerIds = new Set();
+let currentGameId = null;
 
 const screens = {
   join: document.getElementById("screen-join"),
   waiting: document.getElementById("screen-waiting"),
   audioReady: document.getElementById("screen-audio-ready"),
+  wordReveal: document.getElementById("screen-word-reveal"),
   playing: document.getElementById("screen-playing"),
   slipUpPlay: document.getElementById("screen-slipup-play"),
   roundResults: document.getElementById("screen-round-results"),
   spectator: document.getElementById("screen-spectator"),
   results: document.getElementById("screen-results"),
 };
+
+// Only Word Wolf uses "wolf" wording in the shared round-results/final-
+// results screens; every other game (today, just Find the Imposter) keeps
+// the original "imposter" wording unchanged.
+function roleLabel() {
+  return currentGameId === "word-wolf" ? "wolf" : "imposter";
+}
+
+socket.on("room:game-selected", ({ gameId }) => {
+  currentGameId = gameId;
+});
 
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
@@ -64,6 +77,19 @@ socket.on("player:joined", ({ room }) => {
 socket.on("room:player-list", ({ players }) => {
   currentPlayers = players;
   renderPlayerList(players);
+});
+
+// ---- Word Wolf: word reveal ----
+socket.on("game:reveal-word", ({ word }) => {
+  document.getElementById("word-reveal-text").textContent = word;
+  showScreen("wordReveal");
+});
+
+document.getElementById("btn-start-voting").addEventListener("click", () => {
+  selectedVoteTarget = null;
+  renderVoteOptions(currentPlayers);
+  showScreen("playing");
+  document.getElementById("vote-status").textContent = "";
 });
 
 function renderPlayerList(players) {
@@ -239,8 +265,9 @@ socket.on("player:vote-rejected", ({ reason }) => {
 
 // ---- Round results ----
 socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) => {
+  const role = roleLabel();
   const text = eliminated
-    ? `${eliminated.nickname}${eliminated.id === myId ? " (you)" : ""} was voted out — ${wasImposter ? "they were" : "they were NOT"} the imposter. ${remainingActive} players remain.`
+    ? `${eliminated.nickname}${eliminated.id === myId ? " (you)" : ""} was voted out — ${wasImposter ? "they were" : "they were NOT"} the ${role}. ${remainingActive} players remain.`
     : `No one was eliminated this round. ${remainingActive} players remain.`;
 
   if (eliminated) {
@@ -261,9 +288,11 @@ socket.on("game:round-results", ({ eliminated, wasImposter, remainingActive }) =
 
 // ---- Final results ----
 socket.on("game:results", ({ imposter, winner, results }) => {
+  const role = roleLabel();
+  const emoji = role === "wolf" ? "🐺" : "🎭";
   const winnerText = winner === "crew"
-    ? "🕵️ The crew caught the imposter!"
-    : "🎭 The imposter got away with it!";
+    ? `🕵️ The crew caught the ${role}!`
+    : `${emoji} The ${role} got away with it!`;
   document.getElementById("imposter-reveal").textContent = imposter
     ? `${winnerText} It was ${imposter.nickname}.`
     : winnerText;
@@ -275,7 +304,7 @@ socket.on("game:results", ({ imposter, winner, results }) => {
     if (r.wasImposter) li.classList.add("was-imposter");
     const youTag = r.id === myId ? " (you)" : "";
     const status = r.eliminated ? "eliminated" : "survived";
-    li.innerHTML = `<span>${r.nickname}${youTag}${r.wasImposter ? " 🎭" : ""}</span><span>${status}</span>`;
+    li.innerHTML = `<span>${r.nickname}${youTag}${r.wasImposter ? ` ${emoji}` : ""}</span><span>${status}</span>`;
     list.appendChild(li);
   });
 
@@ -285,6 +314,7 @@ socket.on("game:results", ({ imposter, winner, results }) => {
 socket.on("room:reset", ({ room }) => {
   iAmEliminated = false;
   eliminatedPlayerIds = new Set();
+  currentGameId = null;
   renderPlayerList(room.players);
   document.getElementById("btn-ready").disabled = false;
   showScreen("waiting");
