@@ -18,6 +18,7 @@ const screens = {
   waiting: document.getElementById("screen-waiting"),
   audioReady: document.getElementById("screen-audio-ready"),
   playing: document.getElementById("screen-playing"),
+  slipUpPlay: document.getElementById("screen-slipup-play"),
   roundResults: document.getElementById("screen-round-results"),
   spectator: document.getElementById("screen-spectator"),
   results: document.getElementById("screen-results"),
@@ -291,4 +292,53 @@ socket.on("room:reset", ({ room }) => {
 
 socket.on("room:host-disconnected", () => {
   alert("Host disconnected. The room has closed.");
+});
+
+// ---- Slip-Up ----
+socket.on("game:your-view", ({ others }) => {
+  const container = document.getElementById("slipup-others-list");
+  container.innerHTML = "";
+  others.forEach((o) => {
+    const row = document.createElement("div");
+    row.className = "slipup-entry-row";
+    const icon = o.entry.type === "action" ? "🤸" : "🗣️";
+    row.innerHTML = `<span>${o.nickname}</span><span>${icon} ${o.entry.text}</span>`;
+    container.appendChild(row);
+  });
+  showScreen("slipUpPlay");
+});
+
+socket.on("game:score-update", ({ scores }) => {
+  const list = document.getElementById("slipup-scoreboard-player");
+  if (!list) return;
+  list.innerHTML = "";
+  scores
+    .slice()
+    .sort((a, b) => a.catchCount - b.catchCount)
+    .forEach((s) => {
+      const li = document.createElement("li");
+      const youTag = s.id === myId ? " (you)" : "";
+      li.innerHTML = `<span>${s.nickname}${youTag}</span><span>${s.catchCount} caught</span>`;
+      list.appendChild(li);
+    });
+});
+
+socket.on("game:you-were-caught", () => {
+  const toast = document.getElementById("slipup-caught-toast");
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2000);
+});
+
+socket.on("game:final-results", ({ results }) => {
+  document.getElementById("imposter-reveal").textContent =
+    `🏆 ${results[0].nickname} wins with the fewest catches!`;
+  const list = document.getElementById("results-list");
+  list.innerHTML = "";
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    const youTag = r.id === myId ? " (you)" : "";
+    li.innerHTML = `<span>${r.nickname}${youTag}</span><span>${r.catchCount} caught</span>`;
+    list.appendChild(li);
+  });
+  showScreen("results");
 });

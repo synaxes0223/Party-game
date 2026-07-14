@@ -151,3 +151,9 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 .vote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .vote-btn.selected { border-color: var(--accent); background: rgba(255,95,162,0.12); }
+
+.slipup-others-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.slipup-entry-row { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
+
+.toast { display: none; text-align: center; background: var(--accent); color: var(--text); padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
+.toast.show { display: block; animation: fadein 0.3s ease; }
