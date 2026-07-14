@@ -10,6 +10,8 @@ const screens = {
   start: document.getElementById("screen-start"),
   lobby: document.getElementById("screen-lobby"),
   trackSelect: document.getElementById("screen-track-select"),
+  setup: document.getElementById("screen-setup"),
+  referee: document.getElementById("screen-referee"),
   game: document.getElementById("screen-game"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
@@ -71,6 +73,8 @@ function renderGameList(games) {
       document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
       socket.emit("host:select-game", { code: roomCode, gameId: g.id });
+      document.getElementById("btn-start-game").textContent =
+        g.id === "slip-up" ? "Continue to Setup" : "Continue to Round 1";
       updateStartButton();
     });
     container.appendChild(card);
@@ -85,12 +89,18 @@ function updateStartButton() {
 
 document.getElementById("btn-start-game").addEventListener("click", () => {
   document.getElementById("lobby-error").textContent = "";
-  enterTrackSelect();
+  if (selectedGameId === "slip-up") {
+    enterSlipUpSetup();
+  } else {
+    enterTrackSelect();
+  }
 });
 
 socket.on("host:error", ({ error }) => {
   document.getElementById("lobby-error").textContent = error;
   document.getElementById("track-select-error").textContent = error;
+  document.getElementById("slipup-setup-error").textContent = error;
+  document.getElementById("slipup-referee-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -359,4 +369,136 @@ document.getElementById("btn-select-upload").addEventListener("click", () => {
     normalFileId: selectedUploadIds.normal,
     imposterFileId: selectedUploadIds.imposter,
   });
+});
+
+// ---- Slip-Up: setup screen ----
+let slipUpEntryPool = [];
+let slipUpExcludedIds = new Set();
+let slipUpCustomEntries = [];
+
+socket.on("game:entry-pool", ({ entries }) => {
+  slipUpEntryPool = entries;
+  slipUpExcludedIds = new Set();
+  slipUpCustomEntries = [];
+  renderEntryChecklist();
+  renderCustomEntryList();
+});
+
+function enterSlipUpSetup() {
+  document.getElementById("slipup-setup-error").textContent = "";
+  showScreen("setup");
+}
+
+function renderEntryChecklist() {
+  const container = document.getElementById("entry-checklist");
+  container.innerHTML = "";
+  slipUpEntryPool.forEach((entry) => {
+    const row = document.createElement("label");
+    row.className = "entry-row";
+    const icon = entry.type === "action" ? "🤸" : "🗣️";
+    row.innerHTML = `
+      <input type="checkbox" checked data-id="${entry.id}" />
+      <span>${icon} ${entry.text}</span>
+    `;
+    const checkbox = row.querySelector("input");
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        slipUpExcludedIds.delete(entry.id);
+      } else {
+        slipUpExcludedIds.add(entry.id);
+      }
+    });
+    container.appendChild(row);
+  });
+}
+
+function renderCustomEntryList() {
+  const list = document.getElementById("custom-entry-list");
+  list.innerHTML = "";
+  slipUpCustomEntries.forEach((entry, index) => {
+    const li = document.createElement("li");
+    const icon = entry.type === "action" ? "🤸" : "🗣️";
+    li.innerHTML = `<span>${icon} ${entry.text}</span>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn-secondary";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      slipUpCustomEntries.splice(index, 1);
+      renderCustomEntryList();
+    });
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  });
+}
+
+document.getElementById("btn-add-custom-entry").addEventListener("click", () => {
+  const textInput = document.getElementById("custom-entry-text");
+  const typeSelect = document.getElementById("custom-entry-type");
+  const text = textInput.value.trim();
+  if (!text) return;
+  slipUpCustomEntries.push({ type: typeSelect.value, text });
+  textInput.value = "";
+  renderCustomEntryList();
+});
+
+document.getElementById("btn-slipup-start").addEventListener("click", () => {
+  document.getElementById("slipup-setup-error").textContent = "";
+  socket.emit("host:start-game", {
+    code: roomCode,
+    excludedIds: Array.from(slipUpExcludedIds),
+    customEntries: slipUpCustomEntries,
+  });
+});
+
+// ---- Slip-Up: referee screen ----
+socket.on("game:referee-view", ({ players }) => {
+  const container = document.getElementById("referee-rows");
+  container.innerHTML = "";
+  players.forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "referee-row";
+    const icon = p.entry.type === "action" ? "🤸" : "🗣️";
+    row.innerHTML = `
+      <span>${p.nickname}</span>
+      <span>${icon} ${p.entry.text}</span>
+      <button type="button" class="btn-secondary btn-caught" data-id="${p.id}">Caught!</button>
+    `;
+    row.querySelector(".btn-caught").addEventListener("click", () => {
+      socket.emit("host:mark-caught", { code: roomCode, targetPlayerId: p.id });
+    });
+    container.appendChild(row);
+  });
+  showScreen("referee");
+});
+
+socket.on("game:score-update", ({ scores }) => {
+  const list = document.getElementById("slipup-scoreboard");
+  if (!list) return;
+  list.innerHTML = "";
+  scores
+    .slice()
+    .sort((a, b) => a.catchCount - b.catchCount)
+    .forEach((s) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${s.nickname}</span><span>${s.catchCount} caught</span>`;
+      list.appendChild(li);
+    });
+});
+
+document.getElementById("btn-slipup-end").addEventListener("click", () => {
+  socket.emit("host:end-game", { code: roomCode });
+});
+
+socket.on("game:final-results", ({ results }) => {
+  document.getElementById("imposter-reveal").textContent =
+    `🏆 ${results[0].nickname} wins with the fewest catches!`;
+  const list = document.getElementById("results-list");
+  list.innerHTML = "";
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${r.nickname}</span><span>${r.catchCount} caught</span>`;
+    list.appendChild(li);
+  });
+  showScreen("results");
 });

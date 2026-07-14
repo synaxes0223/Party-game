@@ -78,6 +78,39 @@
       <p id="track-select-error" class="error"></p>
     </section>
 
+    <section id="screen-setup" class="screen">
+      <h2>Set up Slip-Up</h2>
+      <p class="subtitle">Uncheck any built-in entry to leave it out, or add your own.</p>
+
+      <div id="entry-checklist" class="entry-checklist"></div>
+
+      <div class="custom-entry-form">
+        <label class="field-label">Add a custom entry
+          <input id="custom-entry-text" class="input-field" placeholder="e.g. juggle three oranges" />
+        </label>
+        <select id="custom-entry-type" class="input-field">
+          <option value="word">Word (avoid saying it)</option>
+          <option value="action">Action (avoid doing it)</option>
+        </select>
+        <button type="button" id="btn-add-custom-entry" class="btn-secondary">Add</button>
+      </div>
+      <ul id="custom-entry-list" class="custom-entry-list"></ul>
+
+      <button id="btn-slipup-start" class="btn-primary">Start Game</button>
+      <p id="slipup-setup-error" class="error"></p>
+    </section>
+
+    <section id="screen-referee" class="screen">
+      <h2>Slip-Up — Referee</h2>
+      <div id="referee-rows" class="referee-rows"></div>
+
+      <h3>Live Scoreboard</h3>
+      <ul id="slipup-scoreboard" class="results-list"></ul>
+
+      <button id="btn-slipup-end" class="btn-primary">End Game</button>
+      <p id="slipup-referee-error" class="error"></p>
+    </section>
+
     <section id="screen-game" class="screen">
       <h2 id="game-title-active"></h2>
       <div id="game-progress" class="progress-box">

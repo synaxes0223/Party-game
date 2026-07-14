@@ -183,3 +183,15 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 .upload-file-row span { flex: 1; font-size: 0.9rem; }
 .btn-slot { padding: 8px 12px; font-size: 0.85rem; width: auto; }
 .btn-slot.selected { border-color: var(--accent); background: rgba(255,95,162,0.25); }
+
+.entry-checklist { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; max-height: 320px; overflow-y: auto; }
+.entry-row { display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
+.entry-row input { width: 18px; height: 18px; }
+
+.custom-entry-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 12px 0; }
+.custom-entry-list { list-style: none; padding: 0; margin: 0 0 16px; }
+.custom-entry-list li { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 8px 14px; border-radius: 10px; margin-bottom: 6px; }
+
+.referee-rows { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.referee-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
+.referee-row .btn-caught { flex-shrink: 0; }
