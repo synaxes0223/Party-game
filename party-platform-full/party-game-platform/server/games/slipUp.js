@@ -97,9 +97,7 @@ function onMarkCaught(room, io, { targetPlayerId }) {
   if (!gs || gs.phase !== "active") return { error: "Game is not active." };
   if (!room.players.has(targetPlayerId)) return { error: "Player not found." };
 
-  const currentlyHeld = Array.from(gs.assignments.entries())
-    .filter(([pid]) => pid !== targetPlayerId)
-    .map(([, entry]) => entry);
+  const currentlyHeld = Array.from(gs.assignments.values());
 
   const reassignResult = slipUpLogic.reassignOne(gs.pool, currentlyHeld);
   if (reassignResult.error) return { error: reassignResult.error };

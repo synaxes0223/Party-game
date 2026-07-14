@@ -492,7 +492,9 @@ document.getElementById("btn-slipup-end").addEventListener("click", () => {
 
 socket.on("game:final-results", ({ results }) => {
   document.getElementById("imposter-reveal").textContent =
-    `🏆 ${results[0].nickname} wins with the fewest catches!`;
+    results.length > 0
+      ? `🏆 ${results[0].nickname} wins with the fewest catches!`
+      : "No players left to rank.";
   const list = document.getElementById("results-list");
   list.innerHTML = "";
   results.forEach((r) => {
