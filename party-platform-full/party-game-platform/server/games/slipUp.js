@@ -56,6 +56,12 @@ function broadcastScore(room, io) {
   io.in(room.code).emit("game:score-update", { scores });
 }
 
+function broadcastAll(room, io) {
+  broadcastYourView(room, io);
+  broadcastRefereeView(room, io);
+  broadcastScore(room, io);
+}
+
 function onStartGame(room, io, { excludedIds, customEntries }) {
   if (room.gameState && room.gameState.phase === "active") {
     return { error: "Game already in progress." };
@@ -82,9 +88,7 @@ function onStartGame(room, io, { excludedIds, customEntries }) {
     catchCounts,
   };
 
-  broadcastYourView(room, io);
-  broadcastRefereeView(room, io);
-  broadcastScore(room, io);
+  broadcastAll(room, io);
   return {};
 }
 
@@ -93,8 +97,6 @@ function onMarkCaught(room, io, { targetPlayerId }) {
   if (!gs || gs.phase !== "active") return { error: "Game is not active." };
   if (!room.players.has(targetPlayerId)) return { error: "Player not found." };
 
-  gs.catchCounts.set(targetPlayerId, (gs.catchCounts.get(targetPlayerId) || 0) + 1);
-
   const currentlyHeld = Array.from(gs.assignments.entries())
     .filter(([pid]) => pid !== targetPlayerId)
     .map(([, entry]) => entry);
@@ -102,12 +104,11 @@ function onMarkCaught(room, io, { targetPlayerId }) {
   const reassignResult = slipUpLogic.reassignOne(gs.pool, currentlyHeld);
   if (reassignResult.error) return { error: reassignResult.error };
 
+  gs.catchCounts.set(targetPlayerId, (gs.catchCounts.get(targetPlayerId) || 0) + 1);
   gs.assignments.set(targetPlayerId, reassignResult.entry);
 
   io.to(targetPlayerId).emit("game:you-were-caught", {});
-  broadcastYourView(room, io);
-  broadcastRefereeView(room, io);
-  broadcastScore(room, io);
+  broadcastAll(room, io);
   return {};
 }
 
@@ -130,9 +131,7 @@ function onPlayerLeft(room, io, socketId) {
   gs.assignments.delete(socketId);
   gs.catchCounts.delete(socketId);
   if (gs.phase === "active") {
-    broadcastYourView(room, io);
-    broadcastRefereeView(room, io);
-    broadcastScore(room, io);
+    broadcastAll(room, io);
   }
 }
 
