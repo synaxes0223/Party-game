@@ -5,9 +5,11 @@
 // onPlayerAction interface across games.
 
 const findTheImposter = require("./findTheImposter");
+const slipUp = require("./slipUp");
 
 const GAMES = {
   [findTheImposter.meta.id]: findTheImposter,
+  [slipUp.meta.id]: slipUp,
 };
 
 function listGames() {

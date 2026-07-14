@@ -134,6 +134,9 @@ io.on("connection", (socket) => {
     if (game.getTrackPairs) {
       socket.emit("game:track-pairs", { pairs: game.getTrackPairs() });
     }
+    if (game.getEntryPool) {
+      socket.emit("game:entry-pool", { entries: game.getEntryPool() });
+    }
   });
 
   // ---- HOST: pick a track pair (also starts the round) ----
@@ -179,6 +182,21 @@ io.on("connection", (socket) => {
   // ---- HOST: advance to the next round ----
   socket.on("host:next-round", ({ code }) => {
     withHostGame(socket, code, (room, game) => game.onNextRound(room, io));
+  });
+
+  // ---- HOST: start a Slip-Up session ----
+  socket.on("host:start-game", ({ code, excludedIds, customEntries }) => {
+    withHostGame(socket, code, (room, game) => game.onStartGame(room, io, { excludedIds, customEntries }));
+  });
+
+  // ---- HOST: mark a player as caught (Slip-Up) ----
+  socket.on("host:mark-caught", ({ code, targetPlayerId }) => {
+    withHostGame(socket, code, (room, game) => game.onMarkCaught(room, io, { targetPlayerId }));
+  });
+
+  // ---- HOST: end a Slip-Up session ----
+  socket.on("host:end-game", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onEndGame(room, io));
   });
 
   // ---- PLAYER: confirms audio preloaded ----
