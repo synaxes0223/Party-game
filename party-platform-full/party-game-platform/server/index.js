@@ -246,6 +246,11 @@ io.on("connection", (socket) => {
 
   // ---- WHEEL: add a punishment (host or any player; room-level, works
   // regardless of which game, if any, is currently selected) ----
+  // Note: wheel:list-updated is intentionally broadcast to the whole room,
+  // not host-only. Players' UI has no list view (host.js/player.js keep the
+  // spin a soft surprise), but the underlying data reaching player sockets
+  // is accepted as low-stakes for a same-WiFi party game — don't "fix" this
+  // into a host-only emit without revisiting that call.
   socket.on("wheel:add-punishment", ({ code, text }) => {
     const room = roomService.getRoom(code);
     if (!room) return;
