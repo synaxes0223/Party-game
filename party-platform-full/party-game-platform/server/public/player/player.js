@@ -374,3 +374,33 @@ socket.on("game:final-results", ({ results }) => {
   });
   showScreen("results");
 });
+
+// ---- Punishment Wheel submission (room-level, independent of any game) ----
+const wheelSubmitPanel = document.getElementById("wheel-submit-panel");
+
+document.getElementById("btn-wheel-submit-toggle").addEventListener("click", () => {
+  wheelSubmitPanel.classList.toggle("hidden");
+});
+document.getElementById("btn-wheel-submit-close").addEventListener("click", () => {
+  wheelSubmitPanel.classList.add("hidden");
+});
+
+document.getElementById("btn-wheel-submit").addEventListener("click", submitPunishment);
+document.getElementById("wheel-submit-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitPunishment();
+});
+
+function submitPunishment() {
+  const input = document.getElementById("wheel-submit-input");
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit("wheel:add-punishment", { code: roomCode, text });
+  input.value = "";
+  const status = document.getElementById("wheel-submit-status");
+  status.textContent = "Added!";
+  setTimeout(() => { status.textContent = ""; }, 2000);
+}
+
+socket.on("wheel:add-error", ({ error }) => {
+  document.getElementById("wheel-submit-status").textContent = error;
+});
