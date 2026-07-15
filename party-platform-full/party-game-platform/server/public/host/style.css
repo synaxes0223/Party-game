@@ -195,3 +195,95 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 .referee-rows { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .referee-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
 .referee-row .btn-caught { flex-shrink: 0; }
+
+.wheel-floating-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.wheel-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  z-index: 101;
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.wheel-panel.hidden { display: none; }
+
+.wheel-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.wheel-close-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.wheel-pointer {
+  width: 0;
+  height: 0;
+  margin: 0 auto;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 16px solid var(--text);
+}
+
+#wheel-canvas { display: block; margin: 0 auto 12px; }
+
+#wheel-result {
+  text-align: center;
+  font-weight: 600;
+  min-height: 1.5em;
+  margin-bottom: 12px;
+}
+
+.wheel-add-row { display: flex; gap: 8px; margin: 12px 0; }
+.wheel-add-row input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent2);
+  background: transparent;
+  color: var(--text);
+}
+.wheel-add-row button { width: auto; padding: 10px 14px; }
+
+#wheel-item-list { list-style: none; padding: 0; margin: 0; }
+#wheel-item-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+}
+#wheel-item-list li button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+}

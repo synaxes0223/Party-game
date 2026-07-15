@@ -568,3 +568,129 @@ socket.on("game:final-results", ({ results }) => {
   });
   showScreen("results");
 });
+
+// ---- Punishment Wheel (room-level, independent of any game) ----
+let wheelItems = [];
+let wheelSpinning = false;
+
+const wheelPanel = document.getElementById("wheel-panel");
+const wheelCanvas = document.getElementById("wheel-canvas");
+const wheelCtx = wheelCanvas.getContext("2d");
+const wheelColors = ["#ff5fa2", "#7c5cff", "#4ade80", "#facc15", "#38bdf8", "#f97316"];
+
+document.getElementById("btn-wheel-toggle").addEventListener("click", () => {
+  wheelPanel.classList.toggle("hidden");
+});
+document.getElementById("btn-wheel-close").addEventListener("click", () => {
+  wheelPanel.classList.add("hidden");
+});
+
+document.getElementById("btn-wheel-add").addEventListener("click", () => {
+  const input = document.getElementById("wheel-add-input");
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit("wheel:add-punishment", { code: roomCode, text });
+  input.value = "";
+});
+
+document.getElementById("wheel-item-list").addEventListener("click", (e) => {
+  if (!e.target.matches("[data-remove-id]")) return;
+  socket.emit("wheel:remove-punishment", { code: roomCode, id: e.target.dataset.removeId });
+});
+
+document.getElementById("btn-wheel-spin").addEventListener("click", () => {
+  if (wheelSpinning || wheelItems.length === 0) return;
+  spinWheel();
+});
+
+socket.on("wheel:list-updated", ({ items }) => {
+  wheelItems = items;
+  renderWheelList();
+  if (!wheelSpinning) drawWheel(0);
+});
+
+socket.on("wheel:add-error", ({ error }) => {
+  alert(error);
+});
+
+function renderWheelList() {
+  const list = document.getElementById("wheel-item-list");
+  list.innerHTML = "";
+  wheelItems.forEach((item) => {
+    const li = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = item.nickname ? `${item.text} (${item.nickname})` : item.text;
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "×";
+    removeBtn.dataset.removeId = item.id;
+    li.appendChild(label);
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  });
+}
+
+function drawWheel(rotation) {
+  const size = wheelCanvas.width;
+  const center = size / 2;
+  const radius = center - 4;
+  wheelCtx.clearRect(0, 0, size, size);
+  if (wheelItems.length === 0) return;
+
+  const sliceAngle = (2 * Math.PI) / wheelItems.length;
+  wheelCtx.save();
+  wheelCtx.translate(center, center);
+  wheelCtx.rotate(rotation);
+  wheelItems.forEach((item, i) => {
+    const start = i * sliceAngle;
+    const end = start + sliceAngle;
+    wheelCtx.beginPath();
+    wheelCtx.moveTo(0, 0);
+    wheelCtx.arc(0, 0, radius, start, end);
+    wheelCtx.closePath();
+    wheelCtx.fillStyle = wheelColors[i % wheelColors.length];
+    wheelCtx.fill();
+
+    wheelCtx.save();
+    wheelCtx.rotate(start + sliceAngle / 2);
+    wheelCtx.textAlign = "right";
+    wheelCtx.fillStyle = "#16121f";
+    wheelCtx.font = "11px sans-serif";
+    const label = item.text.length > 18 ? item.text.slice(0, 17) + "…" : item.text;
+    wheelCtx.fillText(label, radius - 6, 4);
+    wheelCtx.restore();
+  });
+  wheelCtx.restore();
+}
+
+function spinWheel() {
+  wheelSpinning = true;
+  document.getElementById("btn-wheel-spin").disabled = true;
+  document.getElementById("wheel-result").textContent = "";
+
+  const winnerIndex = Math.floor(Math.random() * wheelItems.length);
+  const sliceAngle = (2 * Math.PI) / wheelItems.length;
+  // Canvas angle 0 is at 3 o'clock, increasing clockwise. The pointer is
+  // fixed visually at the top (12 o'clock == angle -PI/2). Land the winning
+  // slice's center under the pointer, plus a few full spins for effect.
+  const targetSliceCenter = winnerIndex * sliceAngle + sliceAngle / 2;
+  const extraSpins = 4 * 2 * Math.PI;
+  const finalRotation = extraSpins + (-Math.PI / 2 - targetSliceCenter);
+
+  const durationMs = 3000;
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / durationMs, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    drawWheel(finalRotation * eased);
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      wheelSpinning = false;
+      document.getElementById("btn-wheel-spin").disabled = false;
+      document.getElementById("wheel-result").textContent = wheelItems[winnerIndex].text;
+    }
+  }
+  requestAnimationFrame(animate);
+}
