@@ -14,6 +14,7 @@ const { Server } = require("socket.io");
 const roomService = require("./roomService");
 const gameRegistry = require("./games/registry");
 const uploadStore = require("./games/uploadStore");
+const wheelLogic = require("./games/wheelLogic");
 
 const app = express();
 const server = http.createServer(app);
@@ -99,6 +100,7 @@ io.on("connection", (socket) => {
       room: roomService.publicRoomView(room),
       games: gameRegistry.listGames(),
     });
+    socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
   });
 
   // ---- PLAYER: join room ----
@@ -111,6 +113,7 @@ io.on("connection", (socket) => {
     const room = result.room;
     socket.join(room.code);
     socket.emit("player:joined", { room: roomService.publicRoomView(room) });
+    socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
     io.to(room.hostSocketId).emit("host:room-updated", {
       room: roomService.publicRoomView(room),
     });
@@ -239,6 +242,40 @@ io.on("connection", (socket) => {
     io.in(room.code).emit("room:reset", {
       room: roomService.publicRoomView(room),
     });
+  });
+
+  // ---- WHEEL: add a punishment (host or any player; room-level, works
+  // regardless of which game, if any, is currently selected) ----
+  socket.on("wheel:add-punishment", ({ code, text }) => {
+    const room = roomService.getRoom(code);
+    if (!room) return;
+
+    let addedBy = "player";
+    let nickname;
+    if (socket.id === room.hostSocketId) {
+      addedBy = "host";
+    } else {
+      const player = room.players.get(socket.id);
+      if (player) nickname = player.nickname;
+    }
+
+    const result = wheelLogic.addItem(room.punishmentWheel.items, { text, addedBy, nickname });
+    if (result.error) {
+      socket.emit("wheel:add-error", { error: result.error });
+      return;
+    }
+    room.punishmentWheel.items = result.items;
+    io.in(room.code).emit("wheel:list-updated", { items: room.punishmentWheel.items });
+  });
+
+  // ---- WHEEL: remove a punishment (host only) ----
+  socket.on("wheel:remove-punishment", ({ code, id }) => {
+    const room = roomService.getRoom(code);
+    if (!room || room.hostSocketId !== socket.id) return;
+
+    const result = wheelLogic.removeItem(room.punishmentWheel.items, id);
+    room.punishmentWheel.items = result.items;
+    io.in(room.code).emit("wheel:list-updated", { items: room.punishmentWheel.items });
   });
 
   // ---- Disconnect handling ----

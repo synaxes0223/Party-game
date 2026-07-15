@@ -2,6 +2,8 @@
 // Core platform service: room creation, joining, and player tracking.
 // This is game-agnostic — any game module plugs into a room's `game` slot.
 
+const wheelLogic = require("./games/wheelLogic");
+
 const rooms = new Map(); // roomCode -> room object
 
 function generateRoomCode() {
@@ -23,6 +25,7 @@ function createRoom(hostSocketId) {
     players: new Map(), // socketId -> { id, nickname, ready }
     gameId: null,       // which game is selected, e.g. "find-the-imposter"
     gameState: null,    // opaque state owned by the game module
+    punishmentWheel: { items: wheelLogic.makeDefaultItems() },
     createdAt: Date.now(),
   };
   rooms.set(code, room);
