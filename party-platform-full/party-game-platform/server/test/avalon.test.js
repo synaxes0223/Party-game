@@ -110,3 +110,47 @@ test("computeKnowledge: loyal servants see nothing extra", () => {
   assert.equal(servantView.evilPlayers.length, 0);
   assert.equal(servantView.percivalPair, null);
 });
+
+test("tallyTeamVote: majority approve wins", () => {
+  const votes = new Map([["p1", true], ["p2", true], ["p3", false]]);
+  const result = game.tallyTeamVote(votes);
+  assert.equal(result.approved, true);
+  assert.equal(result.approveCount, 2);
+  assert.equal(result.rejectCount, 1);
+});
+
+test("tallyTeamVote: a tie counts as rejected", () => {
+  const votes = new Map([["p1", true], ["p2", false]]);
+  const result = game.tallyTeamVote(votes);
+  assert.equal(result.approved, false);
+});
+
+test("resolveQuest: a single fail fails a normal quest", () => {
+  const votes = new Map([["p1", true], ["p2", false]]);
+  assert.equal(game.resolveQuest(votes, false), "fail");
+});
+
+test("resolveQuest: all success passes a normal quest", () => {
+  const votes = new Map([["p1", true], ["p2", true]]);
+  assert.equal(game.resolveQuest(votes, false), "success");
+});
+
+test("resolveQuest: a single fail is NOT enough on a double-fail quest", () => {
+  const votes = new Map([["p1", true], ["p2", true], ["p3", false]]);
+  assert.equal(game.resolveQuest(votes, true), "success");
+});
+
+test("resolveQuest: two fails DO fail a double-fail quest", () => {
+  const votes = new Map([["p1", false], ["p2", true], ["p3", false]]);
+  assert.equal(game.resolveQuest(votes, true), "fail");
+});
+
+test("nextLeaderIndex wraps around", () => {
+  assert.equal(game.nextLeaderIndex(0, 5), 1);
+  assert.equal(game.nextLeaderIndex(4, 5), 0);
+});
+
+test("countQuestResults tallies success/fail counts", () => {
+  const counts = game.countQuestResults(["success", "fail", "success"]);
+  assert.deepEqual(counts, { successCount: 2, failCount: 1 });
+});

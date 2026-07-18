@@ -109,4 +109,42 @@ function computeKnowledge(roles, nicknames) {
   return knowledge;
 }
 
-module.exports = { meta, getRoleTable, assignRoles, computeKnowledge };
+function tallyTeamVote(teamVotes) {
+  let approveCount = 0;
+  let rejectCount = 0;
+  for (const approve of teamVotes.values()) {
+    if (approve) approveCount++;
+    else rejectCount++;
+  }
+  return { approved: approveCount > rejectCount, approveCount, rejectCount };
+}
+
+function resolveQuest(questVotes, requiresDoubleFail) {
+  let failCount = 0;
+  for (const success of questVotes.values()) {
+    if (!success) failCount++;
+  }
+  const threshold = requiresDoubleFail ? 2 : 1;
+  return failCount >= threshold ? "fail" : "success";
+}
+
+function nextLeaderIndex(currentIndex, playerCount) {
+  return (currentIndex + 1) % playerCount;
+}
+
+function countQuestResults(questResults) {
+  const successCount = questResults.filter((r) => r === "success").length;
+  const failCount = questResults.filter((r) => r === "fail").length;
+  return { successCount, failCount };
+}
+
+module.exports = {
+  meta,
+  getRoleTable,
+  assignRoles,
+  computeKnowledge,
+  tallyTeamVote,
+  resolveQuest,
+  nextLeaderIndex,
+  countQuestResults,
+};
