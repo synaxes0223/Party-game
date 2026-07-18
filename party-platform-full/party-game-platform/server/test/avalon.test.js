@@ -353,3 +353,72 @@ test("onTeamVote: the 5th straight rejection ends the game with Evil winning", (
   const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
   assert.equal(resultsEmit.payload.winner, "evil");
 });
+
+function questRoom(nicknames) {
+  const room = proposedRoom(nicknames);
+  const { io } = makeStubIo();
+  room.gameState.playerOrder.forEach((id) => game.onTeamVote(room, io, id, true));
+  return room; // phase is now "quest"
+}
+
+test("onQuestVote rejects a Good player's fail vote and does not record it", () => {
+  const room = questRoom(FIVE);
+  const team = room.gameState.currentTeam;
+  const goodMemberId = team.find((id) => {
+    const role = room.gameState.roles.get(id);
+    return role !== "assassin" && role !== "morgana" && role !== "minion";
+  });
+
+  const { io, emitted } = makeStubIo();
+  game.onQuestVote(room, io, goodMemberId, false);
+  assert.equal(room.gameState.questVotes.has(goodMemberId), false);
+  const rejection = emitted.find((e) => e.event === "game:avalon-quest-vote-rejected");
+  assert.equal(rejection.id, goodMemberId);
+});
+
+test("onQuestVote ignores a vote from a player not on the current team", () => {
+  const room = questRoom(FIVE);
+  const outsiderId = room.gameState.playerOrder.find((id) => !room.gameState.currentTeam.includes(id));
+  const { io } = makeStubIo();
+  game.onQuestVote(room, io, outsiderId, true);
+  assert.equal(room.gameState.questVotes.has(outsiderId), false);
+});
+
+test("onQuestVote: all-success resolves the quest as success and advances to quest-result", () => {
+  const room = questRoom(FIVE);
+  const team = room.gameState.currentTeam;
+  const { io, emitted } = makeStubIo();
+  team.forEach((id) => game.onQuestVote(room, io, id, true));
+
+  assert.equal(room.gameState.questResults[0], "success");
+  assert.equal(room.gameState.phase, "quest-result");
+  assert.equal(room.gameState.rejectionCount, 0);
+  const resultEmit = emitted.find((e) => e.event === "game:avalon-quest-result");
+  assert.equal(resultEmit.payload.outcome, "success");
+});
+
+test("onQuestVote: 3rd failed quest ends the game with Evil winning", () => {
+  const room = questRoom(FIVE);
+  room.gameState.questResults = ["fail", "fail"];
+  const team = room.gameState.currentTeam;
+  const { io, emitted } = makeStubIo();
+  team.forEach((id) => game.onQuestVote(room, io, id, false));
+
+  assert.equal(room.gameState.phase, "game-over");
+  assert.equal(room.gameState.winner, "evil");
+  assert.equal(room.state, "results");
+  const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
+  assert.equal(resultsEmit.payload.winner, "evil");
+});
+
+test("onQuestVote: 3rd successful quest moves straight to the assassin phase", () => {
+  const room = questRoom(FIVE);
+  room.gameState.questResults = ["success", "success"];
+  const team = room.gameState.currentTeam;
+  const { io, emitted } = makeStubIo();
+  team.forEach((id) => game.onQuestVote(room, io, id, true));
+
+  assert.equal(room.gameState.phase, "assassin");
+  const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
+  assert.equal(stateEmit.payload.assassinId, room.gameState.assassinId);
+});

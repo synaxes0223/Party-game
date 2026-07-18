@@ -306,6 +306,59 @@ function onTeamVote(room, io, socketId, approve) {
   }
 }
 
+function advanceAfterQuestVotes(room, io) {
+  const gs = room.gameState;
+  const requiresDoubleFail = gs.questIndex === gs.doubleFailQuestIndex;
+  const outcome = resolveQuest(gs.questVotes, requiresDoubleFail);
+  gs.questResults.push(outcome);
+
+  io.in(room.code).emit("game:avalon-quest-result", {
+    questIndex: gs.questIndex,
+    outcome,
+    questResults: gs.questResults,
+  });
+
+  const { successCount, failCount } = countQuestResults(gs.questResults);
+
+  if (failCount >= 3) {
+    gs.phase = "game-over";
+    gs.winner = "evil";
+    room.state = "results";
+  } else if (successCount >= 3) {
+    gs.phase = "assassin";
+  } else {
+    gs.rejectionCount = 0;
+    gs.leaderIndex = nextLeaderIndex(gs.leaderIndex, gs.playerOrder.length);
+    gs.questIndex += 1;
+    gs.currentTeam = null;
+    gs.phase = "quest-result";
+  }
+
+  broadcastState(room, io);
+  if (gs.phase === "game-over") broadcastResults(room, io);
+}
+
+function onQuestVote(room, io, socketId, success) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "quest") return;
+  if (!gs.currentTeam || !gs.currentTeam.includes(socketId)) return;
+
+  const role = gs.roles.get(socketId);
+  const isEvil = EVIL_ROLES.has(role);
+  if (success === false && !isEvil) {
+    io.to(socketId).emit("game:avalon-quest-vote-rejected", {
+      reason: "Only Evil players can fail a quest.",
+    });
+    return;
+  }
+
+  gs.questVotes.set(socketId, !!success);
+
+  if (gs.questVotes.size === gs.currentTeam.length) {
+    advanceAfterQuestVotes(room, io);
+  }
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -319,4 +372,5 @@ module.exports = {
   onHostBeginQuests,
   onProposeTeam,
   onTeamVote,
+  onQuestVote,
 };
