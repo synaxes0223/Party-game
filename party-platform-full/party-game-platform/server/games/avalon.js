@@ -245,6 +245,67 @@ function onProposeTeam(room, io, socketId, teamPlayerIds) {
   broadcastState(room, io);
 }
 
+function broadcastResults(room, io) {
+  const gs = room.gameState;
+  const roles = gs.playerOrder.map((id) => ({
+    id,
+    nickname: gs.nicknames.get(id),
+    role: gs.roles.get(id),
+    team: EVIL_ROLES.has(gs.roles.get(id)) ? "evil" : "good",
+  }));
+  io.in(room.code).emit("game:avalon-results", {
+    winner: gs.winner,
+    roles,
+    questResults: gs.questResults,
+  });
+}
+
+function resolveTeamVote(room, io) {
+  const gs = room.gameState;
+  const tally = tallyTeamVote(gs.teamVotes);
+  const votes = Array.from(gs.teamVotes.entries()).map(([id, approve]) => ({
+    id,
+    nickname: gs.nicknames.get(id),
+    approve,
+  }));
+
+  io.in(room.code).emit("game:avalon-team-vote-result", {
+    approved: tally.approved,
+    votes,
+    rejectionCount: gs.rejectionCount,
+  });
+
+  if (tally.approved) {
+    gs.phase = "quest";
+    gs.questVotes = new Map();
+  } else {
+    gs.rejectionCount += 1;
+    gs.currentTeam = null;
+    if (gs.rejectionCount >= 5) {
+      gs.phase = "game-over";
+      gs.winner = "evil";
+      room.state = "results";
+    } else {
+      gs.leaderIndex = nextLeaderIndex(gs.leaderIndex, gs.playerOrder.length);
+      gs.phase = "team-proposal";
+    }
+  }
+
+  broadcastState(room, io);
+  if (gs.phase === "game-over") broadcastResults(room, io);
+}
+
+function onTeamVote(room, io, socketId, approve) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "team-vote") return;
+  if (!gs.playerOrder.includes(socketId)) return;
+  gs.teamVotes.set(socketId, !!approve);
+
+  if (gs.teamVotes.size === gs.playerOrder.length) {
+    resolveTeamVote(room, io);
+  }
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -257,4 +318,5 @@ module.exports = {
   onStartGame,
   onHostBeginQuests,
   onProposeTeam,
+  onTeamVote,
 };

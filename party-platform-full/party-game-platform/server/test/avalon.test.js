@@ -291,3 +291,65 @@ test("onProposeTeam with a valid team moves to team-vote and broadcasts the team
   const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
   assert.equal(stateEmit.payload.currentTeam.length, 2);
 });
+
+function proposedRoom(nicknames, teamOverride) {
+  const room = startedRoom(nicknames);
+  const { io } = makeStubIo();
+  game.onHostBeginQuests(room, io);
+  const leaderId = room.gameState.playerOrder[0];
+  const requiredSize = room.gameState.teamSizes[0];
+  const team = teamOverride || room.gameState.playerOrder.slice(0, requiredSize);
+  game.onProposeTeam(room, io, leaderId, team);
+  return room;
+}
+
+test("onTeamVote does nothing until every player has voted", () => {
+  const room = proposedRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  room.gameState.playerOrder.slice(0, 4).forEach((id) => game.onTeamVote(room, io, id, true));
+  assert.equal(room.gameState.phase, "team-vote");
+  assert.equal(emitted.find((e) => e.event === "game:avalon-team-vote-result"), undefined);
+});
+
+test("onTeamVote: majority approve moves to quest phase", () => {
+  const room = proposedRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  room.gameState.playerOrder.forEach((id) => game.onTeamVote(room, io, id, true));
+
+  assert.equal(room.gameState.phase, "quest");
+  const resultEmit = emitted.find((e) => e.event === "game:avalon-team-vote-result");
+  assert.equal(resultEmit.payload.approved, true);
+  assert.equal(resultEmit.payload.votes.length, 5);
+});
+
+test("onTeamVote: majority reject rotates leader and returns to team-proposal", () => {
+  const room = proposedRoom(FIVE);
+  const startingLeader = room.gameState.leaderIndex;
+  const { io } = makeStubIo();
+  room.gameState.playerOrder.forEach((id) => game.onTeamVote(room, io, id, false));
+
+  assert.equal(room.gameState.phase, "team-proposal");
+  assert.equal(room.gameState.rejectionCount, 1);
+  assert.equal(room.gameState.leaderIndex, game.nextLeaderIndex(startingLeader, 5));
+  assert.equal(room.gameState.currentTeam, null);
+});
+
+test("onTeamVote: the 5th straight rejection ends the game with Evil winning", () => {
+  const room = proposedRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+
+  for (let i = 0; i < 5; i++) {
+    room.gameState.playerOrder.forEach((id) => game.onTeamVote(room, io, id, false));
+    if (room.gameState.phase === "team-proposal" && i < 4) {
+      const leaderId = room.gameState.playerOrder[room.gameState.leaderIndex];
+      const requiredSize = room.gameState.teamSizes[room.gameState.questIndex];
+      game.onProposeTeam(room, io, leaderId, room.gameState.playerOrder.slice(0, requiredSize));
+    }
+  }
+
+  assert.equal(room.gameState.phase, "game-over");
+  assert.equal(room.gameState.winner, "evil");
+  assert.equal(room.state, "results");
+  const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
+  assert.equal(resultsEmit.payload.winner, "evil");
+});
