@@ -179,6 +179,31 @@ socket.on("game:avalon-propose-rejected", ({ reason }) => {
   document.getElementById("avalon-proposal-error").textContent = reason;
 });
 
+socket.on("game:avalon-state", (state) => {
+  if (state.phase !== "team-vote") return;
+  document.getElementById("avalon-vote-team-text").textContent =
+    `Proposed team: ${state.currentTeam.map((p) => p.nickname).join(", ")}`;
+  document.getElementById("avalon-team-vote-status").textContent = "";
+  document.getElementById("btn-avalon-approve").disabled = false;
+  document.getElementById("btn-avalon-reject").disabled = false;
+});
+
+function submitAvalonTeamVote(approve) {
+  document.getElementById("btn-avalon-approve").disabled = true;
+  document.getElementById("btn-avalon-reject").disabled = true;
+  document.getElementById("avalon-team-vote-status").textContent = "Vote submitted — waiting for others…";
+  socket.emit("player:avalon-team-vote", { code: roomCode, approve });
+}
+
+document.getElementById("btn-avalon-approve").addEventListener("click", () => submitAvalonTeamVote(true));
+document.getElementById("btn-avalon-reject").addEventListener("click", () => submitAvalonTeamVote(false));
+
+socket.on("game:avalon-team-vote-result", ({ approved, votes }) => {
+  const breakdown = votes.map((v) => `${v.nickname}: ${v.approve ? "✅" : "❌"}`).join(" · ");
+  document.getElementById("avalon-team-vote-status").textContent =
+    `${approved ? "Approved!" : "Rejected."} (${breakdown})`;
+});
+
 document.getElementById("btn-start-voting").addEventListener("click", () => {
   selectedVoteTarget = null;
   renderVoteOptions(currentPlayers);
