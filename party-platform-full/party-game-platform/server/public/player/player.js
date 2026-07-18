@@ -238,6 +238,67 @@ socket.on("game:avalon-quest-vote-rejected", ({ reason }) => {
   document.getElementById("avalon-quest-status").textContent = reason;
 });
 
+let avalonAssassinTarget = null;
+
+socket.on("game:avalon-state", (state) => {
+  if (state.phase !== "assassin") return;
+  const amAssassin = state.assassinId === myId;
+  document.getElementById("avalon-assassin-status").textContent = amAssassin
+    ? "Pick who you think Merlin is."
+    : "The Assassin is deciding Merlin's fate…";
+
+  const picker = document.getElementById("avalon-assassin-picker");
+  const confirmBtn = document.getElementById("btn-avalon-confirm-assassin");
+  picker.innerHTML = "";
+  avalonAssassinTarget = null;
+  confirmBtn.disabled = true;
+  confirmBtn.style.display = amAssassin ? "inline-block" : "none";
+
+  if (!amAssassin) return;
+
+  currentPlayers
+    .filter((p) => p.id !== myId)
+    .forEach((p) => {
+      const btn = document.createElement("button");
+      btn.className = "vote-btn";
+      btn.textContent = p.nickname;
+      btn.addEventListener("click", () => {
+        avalonAssassinTarget = p.id;
+        document.querySelectorAll("#avalon-assassin-picker .vote-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        confirmBtn.disabled = false;
+      });
+      picker.appendChild(btn);
+    });
+});
+
+document.getElementById("btn-avalon-confirm-assassin").addEventListener("click", () => {
+  if (!avalonAssassinTarget) return;
+  document.getElementById("btn-avalon-confirm-assassin").disabled = true;
+  document.querySelectorAll("#avalon-assassin-picker .vote-btn").forEach((b) => (b.disabled = true));
+  socket.emit("player:avalon-assassin-guess", { code: roomCode, targetId: avalonAssassinTarget });
+});
+
+socket.on("game:avalon-results", ({ winner, roles }) => {
+  const winnerText =
+    winner === null
+      ? "⚠️ Game interrupted — a player disconnected."
+      : winner === "good"
+        ? "🛡️ Good wins! The quests were completed."
+        : "🗡️ Evil wins!";
+  document.getElementById("avalon-results-winner").textContent = winnerText;
+
+  const list = document.getElementById("avalon-results-list");
+  list.innerHTML = "";
+  roles.forEach((r) => {
+    const youTag = r.id === myId ? " (you)" : "";
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${r.nickname}${youTag}</span><span>${r.role} (${r.team})</span>`;
+    list.appendChild(li);
+  });
+  showScreen("avalonResults");
+});
+
 document.getElementById("btn-start-voting").addEventListener("click", () => {
   selectedVoteTarget = null;
   renderVoteOptions(currentPlayers);
