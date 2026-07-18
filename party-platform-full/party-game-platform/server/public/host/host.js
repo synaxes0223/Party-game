@@ -19,6 +19,7 @@ const screens = {
   avalonSetup: document.getElementById("screen-avalon-setup"),
   avalonRoleReveal: document.getElementById("screen-avalon-role-reveal"),
   avalonProgress: document.getElementById("screen-avalon-progress"),
+  avalonResults: document.getElementById("screen-avalon-results"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
 };
@@ -526,6 +527,29 @@ socket.on("game:avalon-team-vote-result", ({ approved, votes }) => {
 socket.on("game:avalon-quest-result", ({ outcome }) => {
   document.getElementById("avalon-progress-status").textContent =
     outcome === "success" ? "Quest succeeded! ✓" : "Quest failed! ✗";
+});
+
+document.getElementById("btn-avalon-play-again").addEventListener("click", () => {
+  socket.emit("host:reset-room", { code: roomCode });
+});
+
+socket.on("game:avalon-results", ({ winner, roles }) => {
+  const winnerText =
+    winner === null
+      ? "⚠️ Game interrupted — a player disconnected."
+      : winner === "good"
+        ? "🛡️ Good wins! The quests were completed."
+        : "🗡️ Evil wins!";
+  document.getElementById("avalon-winner-text").textContent = winnerText;
+
+  const list = document.getElementById("avalon-role-list");
+  list.innerHTML = "";
+  roles.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${r.nickname}</span><span>${r.role} (${r.team})</span>`;
+    list.appendChild(li);
+  });
+  showScreen("avalonResults");
 });
 
 function renderEntryChecklist() {
