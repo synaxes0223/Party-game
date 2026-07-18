@@ -215,6 +215,48 @@ io.on("connection", (socket) => {
     withHostGame(socket, code, (room, game) => game.onEndGame(room, io));
   });
 
+  // ---- HOST: start an Avalon game (assigns roles) ----
+  socket.on("host:avalon-start", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onStartGame(room, io));
+  });
+
+  // ---- HOST: confirm everyone has seen their role, begin quests ----
+  socket.on("host:avalon-begin", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostBeginQuests(room, io));
+  });
+
+  // ---- PLAYER: leader proposes a quest team ----
+  socket.on("player:avalon-propose-team", ({ code, teamPlayerIds }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onProposeTeam) game.onProposeTeam(room, io, socket.id, teamPlayerIds);
+  });
+
+  // ---- PLAYER: vote to approve/reject the proposed team ----
+  socket.on("player:avalon-team-vote", ({ code, approve }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onTeamVote) game.onTeamVote(room, io, socket.id, approve);
+  });
+
+  // ---- PLAYER: submit a secret quest pass/fail vote ----
+  socket.on("player:avalon-quest-vote", ({ code, success }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onQuestVote) game.onQuestVote(room, io, socket.id, success);
+  });
+
+  // ---- PLAYER: Assassin's final guess at Merlin's identity ----
+  socket.on("player:avalon-assassin-guess", ({ code, targetId }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onAssassinGuess) game.onAssassinGuess(room, io, socket.id, targetId);
+  });
+
   // ---- PLAYER: confirms audio preloaded ----
   socket.on("player:audio-ready", ({ code }) => {
     const room = roomService.getRoom(code);
