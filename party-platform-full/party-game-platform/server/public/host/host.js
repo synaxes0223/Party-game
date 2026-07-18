@@ -17,6 +17,8 @@ const screens = {
   wordSelect: document.getElementById("screen-word-select"),
   wordRound: document.getElementById("screen-word-round"),
   avalonSetup: document.getElementById("screen-avalon-setup"),
+  avalonRoleReveal: document.getElementById("screen-avalon-role-reveal"),
+  avalonProgress: document.getElementById("screen-avalon-progress"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
 };
@@ -470,6 +472,60 @@ function enterAvalonSetup() {
 document.getElementById("btn-avalon-start").addEventListener("click", () => {
   document.getElementById("avalon-setup-error").textContent = "";
   socket.emit("host:avalon-start", { code: roomCode });
+});
+
+document.getElementById("btn-avalon-begin").addEventListener("click", () => {
+  socket.emit("host:avalon-begin", { code: roomCode });
+});
+
+document.getElementById("btn-avalon-next-quest").addEventListener("click", () => {
+  socket.emit("host:next-round", { code: roomCode });
+});
+
+const AVALON_PHASE_LABEL = {
+  "team-proposal": (s) => `Waiting for ${s.leaderNickname} to propose a team of ${s.teamSize}.`,
+  "team-vote": (s) => `${s.currentTeam.map((p) => p.nickname).join(", ")} — team is being voted on.`,
+  quest: (s) => `${s.currentTeam.map((p) => p.nickname).join(", ")} are on a secret mission…`,
+  "quest-result": () => "Quest resolved.",
+  assassin: () => "The Assassin is deciding Merlin's fate…",
+};
+
+function renderQuestTrack(questResults) {
+  return questResults.map((r) => (r === "success" ? "✓" : "✗")).join(" ") || "no quests completed yet";
+}
+
+socket.on("game:avalon-state", (state) => {
+  if (state.phase === "role-reveal") {
+    showScreen("avalonRoleReveal");
+    return;
+  }
+  if (state.phase === "game-over") return; // handled by Task 13's game:avalon-results listener
+
+  document.getElementById("avalon-progress-title").textContent = `Avalon — Quest ${state.questIndex + 1}`;
+  const label = AVALON_PHASE_LABEL[state.phase];
+  document.getElementById("avalon-progress-status").textContent = label ? label(state) : "";
+  document.getElementById("avalon-quest-track").textContent =
+    `Quests so far: ${renderQuestTrack(state.questResults)}`;
+  document.getElementById("btn-avalon-next-quest").style.display =
+    state.phase === "quest-result" ? "block" : "none";
+  showScreen("avalonProgress");
+});
+
+socket.on("game:avalon-team-vote-result", ({ approved, votes }) => {
+  const list = document.getElementById("avalon-vote-breakdown");
+  list.innerHTML = "";
+  votes.forEach((v) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${v.nickname}</span><span>${v.approve ? "✅ approve" : "❌ reject"}</span>`;
+    list.appendChild(li);
+  });
+  document.getElementById("avalon-progress-status").textContent =
+    approved ? "Team approved!" : "Team rejected — next leader is up.";
+});
+
+socket.on("game:avalon-quest-result", ({ outcome }) => {
+  document.getElementById("avalon-progress-status").textContent =
+    outcome === "success" ? "Quest succeeded! ✓" : "Quest failed! ✗";
 });
 
 function renderEntryChecklist() {
