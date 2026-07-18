@@ -13,6 +13,7 @@ let iAmEliminated = false;
 // voting has no timer, that would hang the round forever with no recovery.
 let eliminatedPlayerIds = new Set();
 let currentGameId = null;
+let myAvalonRole = null;
 
 const screens = {
   join: document.getElementById("screen-join"),
@@ -24,6 +25,12 @@ const screens = {
   roundResults: document.getElementById("screen-round-results"),
   spectator: document.getElementById("screen-spectator"),
   results: document.getElementById("screen-results"),
+  avalonRoleReveal: document.getElementById("screen-avalon-role-reveal"),
+  avalonTeamProposal: document.getElementById("screen-avalon-team-proposal"),
+  avalonTeamVote: document.getElementById("screen-avalon-team-vote"),
+  avalonQuest: document.getElementById("screen-avalon-quest"),
+  avalonAssassin: document.getElementById("screen-avalon-assassin"),
+  avalonResults: document.getElementById("screen-avalon-results"),
 };
 
 // Only Word Wolf uses "wolf" wording in the shared round-results/final-
@@ -83,6 +90,40 @@ socket.on("room:player-list", ({ players }) => {
 socket.on("game:reveal-word", ({ word }) => {
   document.getElementById("word-reveal-text").textContent = word;
   showScreen("wordReveal");
+});
+
+// ---- Avalon: role reveal + phase routing ----
+socket.on("game:avalon-role", (role) => {
+  myAvalonRole = role;
+  const teamLabel = role.team === "good" ? "🛡️ Good" : "🗡️ Evil";
+  document.getElementById("avalon-role-team").textContent = `${teamLabel} — ${role.role}`;
+
+  let detail = "";
+  if (role.role === "merlin") {
+    detail = `You see Evil: ${role.evilPlayers.map((p) => p.nickname).join(", ")}`;
+  } else if (role.role === "percival") {
+    detail = `Merlin and Morgana (in some order): ${role.percivalPair.map((p) => p.nickname).join(", ")}`;
+  } else if (role.evilPlayers.length > 0) {
+    detail = `Your fellow Evil players: ${role.evilPlayers.map((p) => p.nickname).join(", ")}`;
+  } else {
+    detail = "You have no special knowledge this game.";
+  }
+  document.getElementById("avalon-role-detail").textContent = detail;
+});
+
+const AVALON_PHASE_SCREEN = {
+  "role-reveal": "avalonRoleReveal",
+  "team-proposal": "avalonTeamProposal",
+  "team-vote": "avalonTeamVote",
+  quest: "avalonQuest",
+  "quest-result": "avalonTeamProposal", // Task 15 renders a distinct wait message for this phase on the same screen
+  assassin: "avalonAssassin",
+};
+
+socket.on("game:avalon-state", (state) => {
+  if (state.phase === "game-over") return; // handled by game:avalon-results
+  const screenName = AVALON_PHASE_SCREEN[state.phase];
+  if (screenName) showScreen(screenName);
 });
 
 document.getElementById("btn-start-voting").addEventListener("click", () => {

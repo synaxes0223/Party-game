@@ -40,6 +40,51 @@
       <button id="btn-start-voting" class="btn-primary">Start Discussion &amp; Voting</button>
     </section>
 
+    <section id="screen-avalon-role-reveal" class="screen">
+      <h1>🎭 Your Role</h1>
+      <p id="avalon-role-team" class="subtitle"></p>
+      <p id="avalon-role-detail" class="word-reveal-text"></p>
+      <p class="hint">Waiting for the host to begin the quests…</p>
+    </section>
+
+    <section id="screen-avalon-team-proposal" class="screen">
+      <h2>Propose a Team</h2>
+      <p id="avalon-proposal-status" class="subtitle"></p>
+      <div id="avalon-team-picker" class="entry-checklist"></div>
+      <button type="button" id="btn-avalon-submit-team" class="btn-primary" disabled>Propose Team</button>
+      <p id="avalon-proposal-error" class="error"></p>
+    </section>
+
+    <section id="screen-avalon-team-vote" class="screen">
+      <h2>Vote on the Team</h2>
+      <p id="avalon-vote-team-text" class="subtitle"></p>
+      <button type="button" id="btn-avalon-approve" class="vote-btn">✅ Approve</button>
+      <button type="button" id="btn-avalon-reject" class="vote-btn">❌ Reject</button>
+      <p id="avalon-team-vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-avalon-quest" class="screen">
+      <h2>On the Quest</h2>
+      <p id="avalon-quest-text" class="subtitle"></p>
+      <button type="button" id="btn-avalon-success" class="vote-btn">✅ Success</button>
+      <button type="button" id="btn-avalon-fail" class="vote-btn">💀 Fail</button>
+      <p id="avalon-quest-status" class="hint"></p>
+    </section>
+
+    <section id="screen-avalon-assassin" class="screen">
+      <h2>Assassin's Guess</h2>
+      <p id="avalon-assassin-status" class="subtitle"></p>
+      <div id="avalon-assassin-picker" class="vote-list"></div>
+      <button type="button" id="btn-avalon-confirm-assassin" class="btn-primary" disabled>Confirm Guess</button>
+    </section>
+
+    <section id="screen-avalon-results" class="screen">
+      <h2 id="avalon-results-title">Game Over</h2>
+      <p id="avalon-results-winner" class="imposter-reveal"></p>
+      <ul id="avalon-results-list" class="results-list"></ul>
+      <p class="hint">Waiting for host to return to the lobby…</p>
+    </section>
+
     <section id="screen-playing" class="screen">
       <h1>🔊 Listen carefully…</h1>
       <p class="subtitle">Discuss with the group, then vote below whenever you're ready.</p>
