@@ -138,6 +138,82 @@ function countQuestResults(questResults) {
   return { successCount, failCount };
 }
 
+function getPlayerIds(room) {
+  return Array.from(room.players.keys());
+}
+
+function broadcastRoles(room, io, knowledge) {
+  for (const [id, k] of knowledge.entries()) {
+    io.to(id).emit("game:avalon-role", {
+      role: k.role,
+      team: k.team,
+      evilPlayers: k.evilPlayers,
+      percivalPair: k.percivalPair,
+    });
+  }
+}
+
+function broadcastState(room, io) {
+  const gs = room.gameState;
+  const leaderId = gs.playerOrder[gs.leaderIndex] || null;
+  const leaderNickname = leaderId ? gs.nicknames.get(leaderId) : null;
+  const currentTeam = gs.currentTeam
+    ? gs.currentTeam.map((id) => ({ id, nickname: gs.nicknames.get(id) }))
+    : null;
+
+  io.in(room.code).emit("game:avalon-state", {
+    phase: gs.phase,
+    leaderId,
+    leaderNickname,
+    questIndex: gs.questIndex,
+    teamSize: gs.teamSizes[gs.questIndex] || null,
+    currentTeam,
+    rejectionCount: gs.rejectionCount,
+    questResults: gs.questResults,
+    assassinId: gs.phase === "assassin" ? gs.assassinId : null,
+    winner: gs.winner,
+  });
+}
+
+function onStartGame(room, io) {
+  if (room.gameState && room.gameState.phase !== "game-over") {
+    return { error: "Game already in progress." };
+  }
+
+  const playerIds = getPlayerIds(room);
+  const table = getRoleTable(playerIds.length);
+  if (!table) {
+    return { error: `Avalon needs 5-10 players (got ${playerIds.length}).` };
+  }
+
+  const nicknames = new Map(playerIds.map((id) => [id, room.players.get(id).nickname]));
+  const { roles } = assignRoles(playerIds);
+  const knowledge = computeKnowledge(roles, nicknames);
+  const assassinId = findIdByRole(roles, "assassin");
+
+  room.gameState = {
+    phase: "role-reveal",
+    playerOrder: shuffle(playerIds),
+    nicknames,
+    roles,
+    leaderIndex: 0,
+    questIndex: 0,
+    teamSizes: table.teamSizes,
+    doubleFailQuestIndex: table.doubleFailQuestIndex,
+    questResults: [],
+    rejectionCount: 0,
+    currentTeam: null,
+    teamVotes: new Map(),
+    questVotes: new Map(),
+    assassinId,
+    winner: null,
+  };
+
+  broadcastRoles(room, io, knowledge);
+  broadcastState(room, io);
+  return {};
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -147,4 +223,5 @@ module.exports = {
   resolveQuest,
   nextLeaderIndex,
   countQuestResults,
+  onStartGame,
 };

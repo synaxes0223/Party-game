@@ -2,6 +2,29 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const game = require("../games/avalon");
 
+function makeStubIo() {
+  const emitted = [];
+  const target = (kind) => (id) => ({
+    emit: (event, payload) => emitted.push({ kind, id, event, payload }),
+  });
+  return { io: { to: target("to"), in: target("in") }, emitted };
+}
+
+function makeRoom(nicknames) {
+  const players = new Map();
+  nicknames.forEach((name, i) => players.set(`p${i + 1}`, { id: `p${i + 1}`, nickname: name, ready: false }));
+  return {
+    code: "TEST",
+    hostSocketId: "host1",
+    state: "lobby",
+    players,
+    gameId: "avalon",
+    gameState: null,
+  };
+}
+
+const FIVE = ["Alice", "Bob", "Carol", "Dave", "Eve"];
+
 test("meta has the expected shape", () => {
   assert.equal(game.meta.id, "avalon");
   assert.equal(game.meta.name, "Avalon");
@@ -153,4 +176,53 @@ test("nextLeaderIndex wraps around", () => {
 test("countQuestResults tallies success/fail counts", () => {
   const counts = game.countQuestResults(["success", "fail", "success"]);
   assert.deepEqual(counts, { successCount: 2, failCount: 1 });
+});
+
+test("onStartGame errors below minPlayers", () => {
+  const room = makeRoom(["Alice", "Bob", "Carol"]);
+  const { io } = makeStubIo();
+  const result = game.onStartGame(room, io);
+  assert.match(result.error, /5-10 players/);
+});
+
+test("onStartGame assigns roles, sets role-reveal phase, and broadcasts a personalized game:avalon-role to every player", () => {
+  const room = makeRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  const result = game.onStartGame(room, io);
+  assert.deepEqual(result, {});
+  assert.equal(room.gameState.phase, "role-reveal");
+  assert.equal(room.gameState.playerOrder.length, 5);
+  assert.equal(room.gameState.leaderIndex, 0);
+  assert.equal(room.gameState.questIndex, 0);
+  assert.deepEqual(room.gameState.teamSizes, [2, 3, 2, 3, 3]);
+  assert.deepEqual(room.gameState.questResults, []);
+
+  const roleEmits = emitted.filter((e) => e.event === "game:avalon-role");
+  assert.equal(roleEmits.length, 5);
+  roleEmits.forEach((e) => {
+    assert.equal(e.kind, "to");
+    assert.ok(["merlin", "percival", "loyal-servant", "assassin", "morgana"].includes(e.payload.role));
+  });
+});
+
+test("onStartGame broadcasts an initial game:avalon-state to the whole room", () => {
+  const room = makeRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  game.onStartGame(room, io);
+
+  const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
+  assert.equal(stateEmit.kind, "in");
+  assert.equal(stateEmit.id, "TEST");
+  assert.equal(stateEmit.payload.phase, "role-reveal");
+  assert.ok(room.gameState.playerOrder.includes(stateEmit.payload.leaderId));
+  assert.equal(stateEmit.payload.questIndex, 0);
+  assert.equal(stateEmit.payload.winner, null);
+});
+
+test("onStartGame errors if a game is already in progress", () => {
+  const room = makeRoom(FIVE);
+  const { io } = makeStubIo();
+  game.onStartGame(room, io);
+  const result = game.onStartGame(room, io);
+  assert.match(result.error, /already in progress/);
 });
