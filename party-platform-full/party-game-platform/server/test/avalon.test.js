@@ -363,11 +363,14 @@ function questRoom(nicknames) {
 
 test("onQuestVote rejects a Good player's fail vote and does not record it", () => {
   const room = questRoom(FIVE);
-  const team = room.gameState.currentTeam;
-  const goodMemberId = team.find((id) => {
-    const role = room.gameState.roles.get(id);
-    return role !== "assassin" && role !== "morgana" && role !== "minion";
-  });
+  const goodIds = Array.from(room.gameState.roles.entries())
+    .filter(([, role]) => !game.EVIL_ROLES.has(role))
+    .map(([id]) => id);
+  const evilIds = Array.from(room.gameState.roles.entries())
+    .filter(([, role]) => game.EVIL_ROLES.has(role))
+    .map(([id]) => id);
+  room.gameState.currentTeam = [goodIds[0], evilIds[0]];
+  const goodMemberId = goodIds[0];
 
   const { io, emitted } = makeStubIo();
   game.onQuestVote(room, io, goodMemberId, false);
@@ -400,6 +403,10 @@ test("onQuestVote: all-success resolves the quest as success and advances to que
 test("onQuestVote: 3rd failed quest ends the game with Evil winning", () => {
   const room = questRoom(FIVE);
   room.gameState.questResults = ["fail", "fail"];
+  const evilIds = Array.from(room.gameState.roles.entries())
+    .filter(([, role]) => game.EVIL_ROLES.has(role))
+    .map(([id]) => id);
+  room.gameState.currentTeam = evilIds.slice(0, room.gameState.teamSizes[room.gameState.questIndex]);
   const team = room.gameState.currentTeam;
   const { io, emitted } = makeStubIo();
   team.forEach((id) => game.onQuestVote(room, io, id, false));
@@ -421,4 +428,71 @@ test("onQuestVote: 3rd successful quest moves straight to the assassin phase", (
   assert.equal(room.gameState.phase, "assassin");
   const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
   assert.equal(stateEmit.payload.assassinId, room.gameState.assassinId);
+});
+
+function quest1SuccessRoom(nicknames) {
+  const room = questRoom(nicknames);
+  const team = room.gameState.currentTeam;
+  const { io } = makeStubIo();
+  team.forEach((id) => game.onQuestVote(room, io, id, true));
+  return room; // phase is now "quest-result", questIndex 1
+}
+
+test("onNextRound errors outside quest-result", () => {
+  const room = questRoom(FIVE);
+  const { io } = makeStubIo();
+  const result = game.onNextRound(room, io);
+  assert.match(result.error, /Not ready/);
+});
+
+test("onNextRound moves quest-result back to team-proposal", () => {
+  const room = quest1SuccessRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  const result = game.onNextRound(room, io);
+  assert.deepEqual(result, {});
+  assert.equal(room.gameState.phase, "team-proposal");
+  const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
+  assert.equal(stateEmit.payload.questIndex, 1);
+});
+
+function assassinPhaseRoom(nicknames) {
+  const room = questRoom(nicknames);
+  room.gameState.questResults = ["success", "success"];
+  const team = room.gameState.currentTeam;
+  const { io } = makeStubIo();
+  team.forEach((id) => game.onQuestVote(room, io, id, true));
+  return room; // phase is now "assassin"
+}
+
+test("onAssassinGuess ignores a guess from a non-assassin", () => {
+  const room = assassinPhaseRoom(FIVE);
+  const impostor = room.gameState.playerOrder.find((id) => id !== room.gameState.assassinId);
+  const { io } = makeStubIo();
+  game.onAssassinGuess(room, io, impostor, room.gameState.playerOrder[0]);
+  assert.equal(room.gameState.phase, "assassin");
+});
+
+test("onAssassinGuess: correct guess flips the win to Evil", () => {
+  const room = assassinPhaseRoom(FIVE);
+  const merlinId = Array.from(room.gameState.roles.entries()).find(([, r]) => r === "merlin")[0];
+  const { io, emitted } = makeStubIo();
+  game.onAssassinGuess(room, io, room.gameState.assassinId, merlinId);
+
+  assert.equal(room.gameState.phase, "game-over");
+  assert.equal(room.gameState.winner, "evil");
+  assert.equal(room.state, "results");
+  const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
+  assert.equal(resultsEmit.payload.winner, "evil");
+});
+
+test("onAssassinGuess: wrong guess gives Good the win", () => {
+  const room = assassinPhaseRoom(FIVE);
+  const nonMerlinId = Array.from(room.gameState.roles.entries()).find(([, r]) => r !== "merlin")[0];
+  const { io, emitted } = makeStubIo();
+  game.onAssassinGuess(room, io, room.gameState.assassinId, nonMerlinId);
+
+  assert.equal(room.gameState.winner, "good");
+  assert.equal(room.state, "results");
+  const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
+  assert.equal(resultsEmit.payload.winner, "good");
 });

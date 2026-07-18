@@ -359,6 +359,28 @@ function onQuestVote(room, io, socketId, success) {
   }
 }
 
+function onNextRound(room, io) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "quest-result") return { error: "Not ready for the next quest." };
+  gs.phase = "team-proposal";
+  broadcastState(room, io);
+  return {};
+}
+
+function onAssassinGuess(room, io, socketId, targetId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "assassin") return;
+  if (socketId !== gs.assassinId) return;
+
+  const targetRole = gs.roles.get(targetId);
+  gs.winner = targetRole === "merlin" ? "evil" : "good";
+  gs.phase = "game-over";
+  room.state = "results";
+
+  broadcastState(room, io);
+  broadcastResults(room, io);
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -373,4 +395,7 @@ module.exports = {
   onProposeTeam,
   onTeamVote,
   onQuestVote,
+  onNextRound,
+  onAssassinGuess,
+  EVIL_ROLES,
 };
