@@ -14,6 +14,7 @@ let iAmEliminated = false;
 let eliminatedPlayerIds = new Set();
 let currentGameId = null;
 let myAvalonRole = null;
+let avalonSelectedTeam = new Set();
 
 const screens = {
   join: document.getElementById("screen-join"),
@@ -124,6 +125,58 @@ socket.on("game:avalon-state", (state) => {
   if (state.phase === "game-over") return; // handled by game:avalon-results
   const screenName = AVALON_PHASE_SCREEN[state.phase];
   if (screenName) showScreen(screenName);
+});
+
+socket.on("game:avalon-state", (state) => {
+  // "quest-result" reuses this same screen (per Task 14's routing table)
+  // while the host reviews the outcome and clicks Next Quest — show a plain
+  // wait message instead of stale leader/picker content from the last
+  // team-proposal phase.
+  if (state.phase === "quest-result") {
+    document.getElementById("avalon-proposal-status").textContent =
+      "Quest resolved — waiting for the host to start the next quest…";
+    document.getElementById("avalon-team-picker").innerHTML = "";
+    document.getElementById("btn-avalon-submit-team").disabled = true;
+    return;
+  }
+  if (state.phase !== "team-proposal") return;
+  const amLeader = state.leaderId === myId;
+  document.getElementById("avalon-proposal-status").textContent = amLeader
+    ? `You're the leader — pick ${state.teamSize} players for the quest.`
+    : `Waiting for ${state.leaderNickname} to propose a team of ${state.teamSize}.`;
+  document.getElementById("avalon-proposal-error").textContent = "";
+
+  const picker = document.getElementById("avalon-team-picker");
+  const submitBtn = document.getElementById("btn-avalon-submit-team");
+  picker.innerHTML = "";
+  avalonSelectedTeam = new Set();
+  submitBtn.disabled = true;
+
+  if (!amLeader) return;
+
+  currentPlayers.forEach((p) => {
+    const row = document.createElement("label");
+    row.className = "entry-row";
+    row.innerHTML = `<input type="checkbox" data-id="${p.id}" /><span>${p.nickname}</span>`;
+    const checkbox = row.querySelector("input");
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) avalonSelectedTeam.add(p.id);
+      else avalonSelectedTeam.delete(p.id);
+      submitBtn.disabled = avalonSelectedTeam.size !== state.teamSize;
+    });
+    picker.appendChild(row);
+  });
+});
+
+document.getElementById("btn-avalon-submit-team").addEventListener("click", () => {
+  socket.emit("player:avalon-propose-team", {
+    code: roomCode,
+    teamPlayerIds: Array.from(avalonSelectedTeam),
+  });
+});
+
+socket.on("game:avalon-propose-rejected", ({ reason }) => {
+  document.getElementById("avalon-proposal-error").textContent = reason;
 });
 
 document.getElementById("btn-start-voting").addEventListener("click", () => {
