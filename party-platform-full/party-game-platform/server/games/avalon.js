@@ -191,6 +191,7 @@ function onStartGame(room, io) {
   const knowledge = computeKnowledge(roles, nicknames);
   const assassinId = findIdByRole(roles, "assassin");
 
+  room.state = "in-progress";
   room.gameState = {
     phase: "role-reveal",
     playerOrder: shuffle(playerIds),

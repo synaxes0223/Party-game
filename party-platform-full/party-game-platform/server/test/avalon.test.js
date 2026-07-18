@@ -190,6 +190,7 @@ test("onStartGame assigns roles, sets role-reveal phase, and broadcasts a person
   const { io, emitted } = makeStubIo();
   const result = game.onStartGame(room, io);
   assert.deepEqual(result, {});
+  assert.equal(room.state, "in-progress");
   assert.equal(room.gameState.phase, "role-reveal");
   assert.equal(room.gameState.playerOrder.length, 5);
   assert.equal(room.gameState.leaderIndex, 0);
