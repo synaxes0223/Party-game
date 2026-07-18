@@ -215,6 +215,36 @@ function onStartGame(room, io) {
   return {};
 }
 
+function onHostBeginQuests(room, io) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "role-reveal") return { error: "Not ready to begin quests." };
+  gs.phase = "team-proposal";
+  broadcastState(room, io);
+  return {};
+}
+
+function onProposeTeam(room, io, socketId, teamPlayerIds) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "team-proposal") return;
+  const leaderId = gs.playerOrder[gs.leaderIndex];
+  if (socketId !== leaderId) return;
+
+  const requiredSize = gs.teamSizes[gs.questIndex];
+  const ids = Array.isArray(teamPlayerIds) ? Array.from(new Set(teamPlayerIds)) : [];
+  const validIds = ids.filter((id) => gs.playerOrder.includes(id));
+  if (validIds.length !== requiredSize) {
+    io.to(socketId).emit("game:avalon-propose-rejected", {
+      reason: `Pick exactly ${requiredSize} players.`,
+    });
+    return;
+  }
+
+  gs.currentTeam = validIds;
+  gs.teamVotes = new Map();
+  gs.phase = "team-vote";
+  broadcastState(room, io);
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -225,4 +255,6 @@ module.exports = {
   nextLeaderIndex,
   countQuestResults,
   onStartGame,
+  onHostBeginQuests,
+  onProposeTeam,
 };

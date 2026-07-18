@@ -227,3 +227,67 @@ test("onStartGame errors if a game is already in progress", () => {
   const result = game.onStartGame(room, io);
   assert.match(result.error, /already in progress/);
 });
+
+function startedRoom(nicknames) {
+  const room = makeRoom(nicknames);
+  const { io } = makeStubIo();
+  game.onStartGame(room, io);
+  return room;
+}
+
+test("onHostBeginQuests moves role-reveal to team-proposal", () => {
+  const room = startedRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  const result = game.onHostBeginQuests(room, io);
+  assert.deepEqual(result, {});
+  assert.equal(room.gameState.phase, "team-proposal");
+  const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
+  assert.equal(stateEmit.payload.phase, "team-proposal");
+});
+
+test("onHostBeginQuests errors outside role-reveal", () => {
+  const room = startedRoom(FIVE);
+  const { io } = makeStubIo();
+  game.onHostBeginQuests(room, io);
+  const result = game.onHostBeginQuests(room, io);
+  assert.match(result.error, /Not ready/);
+});
+
+test("onProposeTeam rejects a non-leader's proposal", () => {
+  const room = startedRoom(FIVE);
+  const { io } = makeStubIo();
+  game.onHostBeginQuests(room, io);
+  const leaderId = room.gameState.playerOrder[0];
+  const nonLeaderId = room.gameState.playerOrder.find((id) => id !== leaderId);
+
+  game.onProposeTeam(room, io, nonLeaderId, [leaderId, nonLeaderId]);
+  assert.equal(room.gameState.phase, "team-proposal");
+});
+
+test("onProposeTeam rejects a team of the wrong size and notifies the leader", () => {
+  const room = startedRoom(FIVE); // quest 1 team size is 2
+  const { io } = makeStubIo();
+  game.onHostBeginQuests(room, io);
+  const leaderId = room.gameState.playerOrder[0];
+
+  const { io: io2, emitted } = makeStubIo();
+  game.onProposeTeam(room, io2, leaderId, [leaderId]); // only 1, need 2
+  assert.equal(room.gameState.phase, "team-proposal");
+  const rejection = emitted.find((e) => e.event === "game:avalon-propose-rejected");
+  assert.equal(rejection.id, leaderId);
+});
+
+test("onProposeTeam with a valid team moves to team-vote and broadcasts the team", () => {
+  const room = startedRoom(FIVE);
+  const { io } = makeStubIo();
+  game.onHostBeginQuests(room, io);
+  const leaderId = room.gameState.playerOrder[0];
+  const teammateId = room.gameState.playerOrder[1];
+
+  const { io: io2, emitted } = makeStubIo();
+  game.onProposeTeam(room, io2, leaderId, [leaderId, teammateId]);
+  assert.equal(room.gameState.phase, "team-vote");
+  assert.deepEqual(room.gameState.currentTeam.sort(), [leaderId, teammateId].sort());
+  const stateEmit = emitted.find((e) => e.event === "game:avalon-state");
+  assert.equal(stateEmit.payload.currentTeam.length, 2);
+});
