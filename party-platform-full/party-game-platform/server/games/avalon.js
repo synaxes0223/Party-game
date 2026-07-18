@@ -397,5 +397,4 @@ module.exports = {
   onQuestVote,
   onNextRound,
   onAssassinGuess,
-  EVIL_ROLES,
 };

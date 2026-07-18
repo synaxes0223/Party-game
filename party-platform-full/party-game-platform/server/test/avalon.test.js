@@ -24,6 +24,7 @@ function makeRoom(nicknames) {
 }
 
 const FIVE = ["Alice", "Bob", "Carol", "Dave", "Eve"];
+const EVIL_ROLE_NAMES = new Set(["assassin", "morgana", "minion"]);
 
 test("meta has the expected shape", () => {
   assert.equal(game.meta.id, "avalon");
@@ -364,10 +365,10 @@ function questRoom(nicknames) {
 test("onQuestVote rejects a Good player's fail vote and does not record it", () => {
   const room = questRoom(FIVE);
   const goodIds = Array.from(room.gameState.roles.entries())
-    .filter(([, role]) => !game.EVIL_ROLES.has(role))
+    .filter(([, role]) => !EVIL_ROLE_NAMES.has(role))
     .map(([id]) => id);
   const evilIds = Array.from(room.gameState.roles.entries())
-    .filter(([, role]) => game.EVIL_ROLES.has(role))
+    .filter(([, role]) => EVIL_ROLE_NAMES.has(role))
     .map(([id]) => id);
   room.gameState.currentTeam = [goodIds[0], evilIds[0]];
   const goodMemberId = goodIds[0];
@@ -404,7 +405,7 @@ test("onQuestVote: 3rd failed quest ends the game with Evil winning", () => {
   const room = questRoom(FIVE);
   room.gameState.questResults = ["fail", "fail"];
   const evilIds = Array.from(room.gameState.roles.entries())
-    .filter(([, role]) => game.EVIL_ROLES.has(role))
+    .filter(([, role]) => EVIL_ROLE_NAMES.has(role))
     .map(([id]) => id);
   room.gameState.currentTeam = evilIds.slice(0, room.gameState.teamSizes[room.gameState.questIndex]);
   const team = room.gameState.currentTeam;
