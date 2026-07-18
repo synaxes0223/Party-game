@@ -5,6 +5,7 @@ let selectedGameId = null;
 let hasStartedFirstRound = false;
 let activePlayerCount = 0;
 let lastKnownRound = 0;
+let gamesById = {};
 
 const screens = {
   start: document.getElementById("screen-start"),
@@ -15,6 +16,7 @@ const screens = {
   game: document.getElementById("screen-game"),
   wordSelect: document.getElementById("screen-word-select"),
   wordRound: document.getElementById("screen-word-round"),
+  avalonSetup: document.getElementById("screen-avalon-setup"),
   roundResults: document.getElementById("screen-round-results"),
   results: document.getElementById("screen-results"),
 };
@@ -40,6 +42,7 @@ socket.on("host:room-created", ({ room, games }) => {
   document.getElementById("room-code").textContent = room.code;
   document.getElementById("join-url").textContent =
     `${window.location.protocol}//${window.location.host}/player`;
+  gamesById = Object.fromEntries(games.map((g) => [g.id, g]));
   renderGameList(games);
   showScreen("lobby");
 });
@@ -83,7 +86,7 @@ function renderGameList(games) {
       card.classList.add("selected");
       socket.emit("host:select-game", { code: roomCode, gameId: g.id });
       document.getElementById("btn-start-game").textContent =
-        g.id === "slip-up" ? "Continue to Setup" : "Continue to Round 1";
+        g.id === "slip-up" || g.id === "avalon" ? "Continue to Setup" : "Continue to Round 1";
       updateStartButton();
     });
     container.appendChild(card);
@@ -93,7 +96,8 @@ function renderGameList(games) {
 function updateStartButton() {
   const btn = document.getElementById("btn-start-game");
   const playerCount = document.querySelectorAll("#player-list li").length;
-  btn.disabled = !(selectedGameId && playerCount >= 3);
+  const selectedGame = gamesById[selectedGameId];
+  btn.disabled = !(selectedGame && playerCount >= selectedGame.minPlayers && playerCount <= selectedGame.maxPlayers);
 }
 
 document.getElementById("btn-start-game").addEventListener("click", () => {
@@ -102,6 +106,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
     enterSlipUpSetup();
   } else if (selectedGameId === "word-wolf") {
     enterWordSelect();
+  } else if (selectedGameId === "avalon") {
+    enterAvalonSetup();
   } else {
     enterTrackSelect();
   }
@@ -113,6 +119,7 @@ socket.on("host:error", ({ error }) => {
   document.getElementById("slipup-setup-error").textContent = error;
   document.getElementById("slipup-referee-error").textContent = error;
   document.getElementById("word-select-error").textContent = error;
+  document.getElementById("avalon-setup-error").textContent = error;
 });
 
 // ---- Track selection ----
@@ -452,6 +459,18 @@ function enterSlipUpSetup() {
   document.getElementById("slipup-setup-error").textContent = "";
   showScreen("setup");
 }
+
+function enterAvalonSetup() {
+  document.getElementById("avalon-setup-error").textContent = "";
+  document.getElementById("avalon-player-count").textContent =
+    document.querySelectorAll("#player-list li").length;
+  showScreen("avalonSetup");
+}
+
+document.getElementById("btn-avalon-start").addEventListener("click", () => {
+  document.getElementById("avalon-setup-error").textContent = "";
+  socket.emit("host:avalon-start", { code: roomCode });
+});
 
 function renderEntryChecklist() {
   const container = document.getElementById("entry-checklist");
