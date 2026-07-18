@@ -503,12 +503,20 @@ socket.on("game:avalon-state", (state) => {
   if (state.phase === "game-over") return; // handled by Task 13's game:avalon-results listener
 
   document.getElementById("avalon-progress-title").textContent = `Avalon — Quest ${state.questIndex + 1}`;
-  const label = AVALON_PHASE_LABEL[state.phase];
-  document.getElementById("avalon-progress-status").textContent = label ? label(state) : "";
+  // Skip updating progress-status during quest-result phase; game:avalon-quest-result
+  // listener already set the more informative "Quest succeeded!/failed!" text
+  if (state.phase !== "quest-result") {
+    const label = AVALON_PHASE_LABEL[state.phase];
+    document.getElementById("avalon-progress-status").textContent = label ? label(state) : "";
+  }
   document.getElementById("avalon-quest-track").textContent =
     `Quests so far: ${renderQuestTrack(state.questResults)}`;
   document.getElementById("btn-avalon-next-quest").style.display =
     state.phase === "quest-result" ? "block" : "none";
+  // Clear stale vote breakdown when phase changes away from team-vote
+  if (state.phase !== "team-vote") {
+    document.getElementById("avalon-vote-breakdown").innerHTML = "";
+  }
   showScreen("avalonProgress");
 });
 
