@@ -61,6 +61,18 @@ Win conditions:
 
 ## 2. Round flow (phase state machine)
 
+<!-- Updated post-implementation: event names below use the actual
+`avalon-`-namespaced wire protocol (avoids collisions with other games'
+generic event names, e.g. `player:vote`). Also, the implementation
+broadcasts a single consolidated `game:avalon-state` event after every phase
+transition (carrying phase/leader/team/questResults/etc.) rather than one
+bespoke event per transition — this section still names the transient
+per-transition reveal events (`game:avalon-role`, `game:avalon-team-vote-result`,
+`game:avalon-quest-result`, `game:avalon-results`) since those carry payloads
+`game:avalon-state` doesn't, but every phase change is also always followed
+by a `game:avalon-state` broadcast, which is what actually drives client-side
+screen routing. -->
+
 `room.gameState.phase` progression, with a `leaderIndex` that rotates to the
 next player (in the fixed join order captured at `role-reveal`, wrapping
 around) after every proposal — whether approved, rejected, or moving on to
@@ -68,36 +80,38 @@ the next quest — and a `rejectionCount` that resets to 0 whenever a quest
 resolves. The player list never shrinks mid-game (a disconnect ends the game
 per §3's `onPlayerLeft`), so rotation order is stable for the whole match.
 
-1. **`role-reveal`** — game starts, roles/knowledge assigned once, each
-   player privately receives their role info via `game:reveal-role`. Host
-   clicks **Begin Quests** (`host:avalon-begin`) → `team-proposal`.
+1. **`role-reveal`** — host clicks **Start Game** (`host:avalon-start`) from
+   the lobby, roles/knowledge assigned once, each player privately receives
+   their role info via `game:avalon-role`. Host clicks **Begin Quests**
+   (`host:avalon-begin`) → `team-proposal`.
 2. **`team-proposal`** — the current leader picks exactly the required number
-   of teammates and submits via `player:propose-team`; only the leader's
-   submission is accepted (server checks `socketId === leaderId`) → phase
-   becomes `team-vote`.
+   of teammates and submits via `player:avalon-propose-team`; only the
+   leader's submission is accepted (server checks `socketId === leaderId`) →
+   phase becomes `team-vote`.
 3. **`team-vote`** — every active player casts approve/reject via
-   `player:team-vote`. Once all votes are in, results are revealed
+   `player:avalon-team-vote`. Once all votes are in, results are revealed
    **publicly** (real Avalon rule: team-vote ballots are not secret) via
-   `game:team-vote-result`, listing every player's vote.
+   `game:avalon-team-vote-result`, listing every player's vote.
    - Majority approve → `quest`.
    - Majority reject or tie → `rejectionCount += 1`, leader rotates, back to
      `team-proposal` automatically (no host gate — keeps pace brisk). On the
      5th straight rejection → `game-over`, Evil wins.
 4. **`quest`** — only the proposed team secretly submits pass/fail via
-   `player:quest-vote`. The server rejects a `fail` vote from a Good player
-   outright (this is the actual security boundary, not just a UI
+   `player:avalon-quest-vote`. The server rejects a `fail` vote from a Good
+   player outright (this is the actual security boundary, not just a UI
    restriction). Once every team member has voted, resolve against the
-   fail-threshold table above, broadcast `game:quest-result` with the
+   fail-threshold table above, broadcast `game:avalon-quest-result` with the
    pass/fail outcome only — individual ballots are never revealed, matching
    the real game.
    - 3rd failed quest → `game-over`, Evil wins.
    - 3rd successful quest → straight to `assassin` (no host gate; the
      Assassin has to act).
    - Otherwise → `rejectionCount` resets to 0, leader rotates, host clicks
-     **Next Quest** (`host:avalon-next-quest`) → back to `team-proposal`.
+     **Next Quest** (reuses the existing `host:next-round` event) → back to
+     `team-proposal`.
 5. **`assassin`** — the Assassin privately picks a target via
-   `player:assassin-guess`. Target is Merlin → Evil wins; otherwise Good
-   wins. → `game-over`.
+   `player:avalon-assassin-guess`. Target is Merlin → Evil wins; otherwise
+   Good wins. → `game-over`.
 6. **`game-over`** — final-results screen (reused pattern), extended with a
    full role reveal (see §4).
 
