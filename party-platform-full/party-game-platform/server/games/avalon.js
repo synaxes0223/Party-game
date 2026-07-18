@@ -381,6 +381,15 @@ function onAssassinGuess(room, io, socketId, targetId) {
   broadcastResults(room, io);
 }
 
+function onPlayerLeft(room, io, socketId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase === "game-over") return;
+  gs.phase = "game-over";
+  gs.winner = null;
+  room.state = "results";
+  broadcastResults(room, io);
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -397,4 +406,5 @@ module.exports = {
   onQuestVote,
   onNextRound,
   onAssassinGuess,
+  onPlayerLeft,
 };

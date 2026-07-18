@@ -497,3 +497,38 @@ test("onAssassinGuess: wrong guess gives Good the win", () => {
   const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
   assert.equal(resultsEmit.payload.winner, "good");
 });
+
+test("onPlayerLeft ends the game with winner null (interrupted) and still reveals roles", () => {
+  const room = startedRoom(FIVE);
+  const departingId = room.gameState.playerOrder[0];
+  room.players.delete(departingId); // index.js removes the player before calling onPlayerLeft
+
+  const { io, emitted } = makeStubIo();
+  game.onPlayerLeft(room, io, departingId);
+
+  assert.equal(room.gameState.phase, "game-over");
+  assert.equal(room.gameState.winner, null);
+  assert.equal(room.state, "results");
+  const resultsEmit = emitted.find((e) => e.event === "game:avalon-results");
+  assert.equal(resultsEmit.payload.winner, null);
+  assert.equal(resultsEmit.payload.roles.length, 5);
+  const departingEntry = resultsEmit.payload.roles.find((r) => r.id === departingId);
+  assert.ok(departingEntry.nickname, "departing player's nickname should still be present via gs.nicknames");
+});
+
+test("onPlayerLeft is a no-op once the game is already over", () => {
+  const room = startedRoom(FIVE);
+  room.gameState.phase = "game-over";
+  room.gameState.winner = "good";
+  const { io, emitted } = makeStubIo();
+  game.onPlayerLeft(room, io, room.gameState.playerOrder[0]);
+  assert.equal(emitted.length, 0);
+  assert.equal(room.gameState.winner, "good");
+});
+
+test("onPlayerLeft is a no-op if no game has started", () => {
+  const room = makeRoom(FIVE);
+  const { io, emitted } = makeStubIo();
+  game.onPlayerLeft(room, io, "p1");
+  assert.equal(emitted.length, 0);
+});
