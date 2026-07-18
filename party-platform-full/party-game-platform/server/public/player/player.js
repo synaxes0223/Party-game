@@ -204,6 +204,40 @@ socket.on("game:avalon-team-vote-result", ({ approved, votes }) => {
     `${approved ? "Approved!" : "Rejected."} (${breakdown})`;
 });
 
+function isAvalonEvil() {
+  return myAvalonRole && ["assassin", "morgana", "minion"].includes(myAvalonRole.role);
+}
+
+socket.on("game:avalon-state", (state) => {
+  if (state.phase !== "quest") return;
+  const onTeam = state.currentTeam.some((p) => p.id === myId);
+  document.getElementById("avalon-quest-text").textContent = onTeam
+    ? "You're on the quest — submit your vote."
+    : `${state.currentTeam.map((p) => p.nickname).join(", ")} are on a secret mission…`;
+  document.getElementById("avalon-quest-status").textContent = "";
+
+  document.getElementById("btn-avalon-success").style.display = onTeam ? "inline-block" : "none";
+  document.getElementById("btn-avalon-fail").style.display = onTeam && isAvalonEvil() ? "inline-block" : "none";
+  document.getElementById("btn-avalon-success").disabled = false;
+  document.getElementById("btn-avalon-fail").disabled = false;
+});
+
+function submitAvalonQuestVote(success) {
+  document.getElementById("btn-avalon-success").disabled = true;
+  document.getElementById("btn-avalon-fail").disabled = true;
+  document.getElementById("avalon-quest-status").textContent = "Vote submitted — waiting for the rest of the team…";
+  socket.emit("player:avalon-quest-vote", { code: roomCode, success });
+}
+
+document.getElementById("btn-avalon-success").addEventListener("click", () => submitAvalonQuestVote(true));
+document.getElementById("btn-avalon-fail").addEventListener("click", () => submitAvalonQuestVote(false));
+
+socket.on("game:avalon-quest-vote-rejected", ({ reason }) => {
+  document.getElementById("btn-avalon-success").disabled = false;
+  document.getElementById("btn-avalon-fail").disabled = false;
+  document.getElementById("avalon-quest-status").textContent = reason;
+});
+
 document.getElementById("btn-start-voting").addEventListener("click", () => {
   selectedVoteTarget = null;
   renderVoteOptions(currentPlayers);
