@@ -14,6 +14,18 @@ test("rejects anything too short to be unguessable", () => {
   assert.equal(isValidToken("abc123"), false);
 });
 
+test("rejects a token exactly one character under the minimum", () => {
+  assert.equal(isValidToken("a".repeat(7)), false);
+});
+
+test("accepts a token at exactly the minimum length", () => {
+  assert.equal(isValidToken("a".repeat(8)), true);
+});
+
+test("accepts a token at exactly the maximum length", () => {
+  assert.equal(isValidToken("a".repeat(64)), true);
+});
+
 test("rejects an over-long token", () => {
   assert.equal(isValidToken("a".repeat(65)), false);
 });
