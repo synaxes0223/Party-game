@@ -91,13 +91,25 @@ function markPlayerDisconnected(playerToken) {
   return null;
 }
 
-function removeRoomIfEmpty(code) {
-  const room = getRoom(code);
-  if (room && room.players.size === 0) {
-    rooms.delete(code);
-    return true;
+// Nobody is removed on disconnect any more, so rooms have to be reclaimed on a
+// timer instead of when the last player leaves.
+function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000) {
+  const deleted = [];
+  for (const room of rooms.values()) {
+    const players = Array.from(room.players.values());
+    const anyoneConnected = room.hostConnected || players.some((p) => p.connected);
+    if (anyoneConnected) continue;
+
+    const timestamps = [room.createdAt, room.hostDisconnectedAt || 0];
+    players.forEach((p) => timestamps.push(p.disconnectedAt || 0));
+    const lastSeen = Math.max(...timestamps);
+
+    if (now - lastSeen >= graceMs) {
+      rooms.delete(room.code);
+      deleted.push(room.code);
+    }
   }
-  return false;
+  return deleted;
 }
 
 function deleteRoom(code) {
@@ -148,7 +160,7 @@ module.exports = {
   getRoom,
   joinRoom,
   markPlayerDisconnected,
-  removeRoomIfEmpty,
+  sweepAbandonedRooms,
   deleteRoom,
   findRoomByHost,
   publicRoomView,

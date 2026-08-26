@@ -131,3 +131,38 @@ test("a different token cannot reclaim someone else's room", () => {
   roomService.markHostDisconnected(HOST);
   assert.equal(roomService.reclaimHost(room.code, TOKEN_B), null);
 });
+
+const MINUTE = 60 * 1000;
+
+test("a room with anyone still connected is never swept", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  roomService.markHostDisconnected(HOST);
+  const deleted = roomService.sweepAbandonedRooms(Date.now() + 60 * MINUTE, 10 * MINUTE);
+  assert.equal(deleted.includes(room.code), false);
+});
+
+test("a fully abandoned room survives until the grace period elapses", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  room.state = "in-progress";
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  roomService.markPlayerDisconnected(TOKEN_A);
+  roomService.markHostDisconnected(HOST);
+
+  const early = roomService.sweepAbandonedRooms(Date.now() + 1 * MINUTE, 10 * MINUTE);
+  assert.equal(early.includes(room.code), false);
+
+  const late = roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE);
+  assert.equal(late.includes(room.code), true);
+  assert.equal(roomService.getRoom(room.code), undefined);
+});
+
+test("an empty room whose host left is swept after the grace period", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  const deleted = roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE);
+  assert.equal(deleted.includes(room.code), true);
+});
