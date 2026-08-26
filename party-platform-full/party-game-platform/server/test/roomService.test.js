@@ -104,3 +104,30 @@ test("publicRoomView exposes connection state", () => {
   assert.equal(view.players[0].id, TOKEN_A);
   assert.equal(view.players[0].connected, true);
 });
+
+test("a host disconnect flags the host but keeps the room alive", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  const found = roomService.markHostDisconnected(HOST);
+  assert.equal(found.code, room.code);
+  assert.equal(found.hostConnected, false);
+  assert.ok(typeof found.hostDisconnectedAt === "number");
+  assert.ok(roomService.getRoom(room.code), "room must still exist");
+});
+
+test("the same host token reclaims the room", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  const back = roomService.reclaimHost(room.code, HOST);
+  assert.equal(back.code, room.code);
+  assert.equal(back.hostConnected, true);
+  assert.equal(back.hostDisconnectedAt, null);
+});
+
+test("a different token cannot reclaim someone else's room", () => {
+  const { host: HOST, b: TOKEN_B } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  assert.equal(roomService.reclaimHost(room.code, TOKEN_B), null);
+});

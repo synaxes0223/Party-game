@@ -125,6 +125,24 @@ function publicRoomView(room) {
   };
 }
 
+// The host disconnecting used to delete the room outright, which on the
+// Android deployment meant backgrounding the browser tab destroyed the game.
+function markHostDisconnected(hostId) {
+  const room = findRoomByHost(hostId);
+  if (!room) return null;
+  room.hostConnected = false;
+  room.hostDisconnectedAt = Date.now();
+  return room;
+}
+
+function reclaimHost(code, hostId) {
+  const room = getRoom(code);
+  if (!room || room.hostId !== hostId) return null;
+  room.hostConnected = true;
+  room.hostDisconnectedAt = null;
+  return room;
+}
+
 module.exports = {
   createRoom,
   getRoom,
@@ -134,4 +152,6 @@ module.exports = {
   deleteRoom,
   findRoomByHost,
   publicRoomView,
+  markHostDisconnected,
+  reclaimHost,
 };
