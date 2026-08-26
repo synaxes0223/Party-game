@@ -40,11 +40,73 @@ document.getElementById("btn-create-room").addEventListener("click", () => {
   socket.emit("host:create-room");
 });
 
+// The host screen is normally opened on the host's own device, where
+// window.location.host is `localhost` — useless to players. Ask the server
+// which LAN address they should actually dial, and show it as a QR code so
+// nobody has to type an IP at a party.
+async function renderJoinInfo() {
+  const urlEl = document.getElementById("join-url");
+  const qrEl = document.getElementById("join-qr");
+  const altEl = document.getElementById("join-url-alt");
+  const fallback = `${window.location.protocol}//${window.location.host}/player/`;
+
+  qrEl.innerHTML = "";
+  altEl.textContent = "";
+
+  let info = null;
+  try {
+    const res = await fetch("/api/join-info", { cache: "no-store" });
+    if (res.ok) info = await res.json();
+  } catch (err) {
+    info = null;
+  }
+
+  const primary = (info && info.primaryJoinUrl) || fallback;
+  urlEl.textContent = primary;
+  if (info && info.qrSvg) qrEl.innerHTML = info.qrSvg;
+
+  // More than one interface (e.g. WiFi client + hotspot) means the primary
+  // guess can be the wrong one; list the rest so the host can try another.
+  const others = ((info && info.joinUrls) || []).filter((u) => u !== primary);
+  if (others.length) altEl.textContent = `If that does not work, try: ${others.join("  |  ")}`;
+}
+
+// A party can run on a hotspot with no internet at all, and YouTube playback
+// silently needs one. Probe for real reachability rather than trusting
+// navigator.onLine, which reports true for an internet-less hotspot.
+async function isInternetReachable() {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    await fetch("https://www.youtube.com/generate_204", {
+      mode: "no-cors",
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function applyYoutubeAvailability() {
+  const tabBtn = document.querySelector('.tab-btn[data-tab="youtube"]');
+  const notice = document.getElementById("yt-offline-notice");
+  const useBtn = document.getElementById("btn-select-youtube");
+  if (!tabBtn) return;
+
+  const online = await isInternetReachable();
+  tabBtn.disabled = !online;
+  tabBtn.title = online ? "" : "No internet on this network";
+  if (notice) notice.hidden = online;
+  if (useBtn) useBtn.disabled = !online;
+}
+
 socket.on("host:room-created", ({ room, games }) => {
   roomCode = room.code;
   document.getElementById("room-code").textContent = room.code;
-  document.getElementById("join-url").textContent =
-    `${window.location.protocol}//${window.location.host}/player`;
+  renderJoinInfo();
   gamesById = Object.fromEntries(games.map((g) => [g.id, g]));
   renderGameList(games);
   showScreen("lobby");
@@ -151,6 +213,7 @@ function enterTrackSelect() {
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
   document.querySelector('.tab-btn[data-tab="builtin"]').classList.add("active");
   document.getElementById("tab-builtin").classList.add("active");
+  applyYoutubeAvailability();
   showScreen("trackSelect");
 }
 

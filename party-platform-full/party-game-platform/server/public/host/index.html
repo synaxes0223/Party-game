@@ -20,6 +20,8 @@
         <span class="label">Room Code</span>
         <span id="room-code" class="room-code">----</span>
         <span id="join-url" class="join-url"></span>
+        <div id="join-qr" class="join-qr"></div>
+        <p id="join-url-alt" class="join-url-alt"></p>
       </div>
 
       <div class="players-panel">
@@ -52,6 +54,10 @@
       </div>
 
       <div id="tab-youtube" class="tab-panel">
+        <p id="yt-offline-notice" class="offline-notice" hidden>
+          No internet on this network — YouTube tracks cannot load. Use a
+          built-in pair or an uploaded file instead.
+        </p>
         <label class="field-label">Normal track URL
           <input id="yt-normal-url" class="input-field" placeholder="https://youtube.com/watch?v=..." />
         </label>

@@ -3,7 +3,6 @@
 // Serves host/player web pages and coordinates rooms via Socket.io.
 
 const path = require("path");
-const os = require("os");
 const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
@@ -15,6 +14,7 @@ const roomService = require("./roomService");
 const gameRegistry = require("./games/registry");
 const uploadStore = require("./games/uploadStore");
 const wheelLogic = require("./games/wheelLogic");
+const lanInfo = require("./lanInfo");
 
 const app = express();
 const server = http.createServer(app);
@@ -29,8 +29,22 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/audio", express.static(path.join(__dirname, "audio")));
 app.use("/uploads", express.static(UPLOADS_DIR));
 
+// Players reach this server by reading an address off the host's screen, and
+// the obvious thing to type is the bare host:port. Without this they land on
+// a 404 at exactly the moment the party is waiting on them.
+app.get("/", (req, res) => res.redirect("/player/"));
+
 app.get("/api/games", (req, res) => {
   res.json(gameRegistry.listGames());
+});
+
+// The host screen is usually opened on the host's own device as
+// http://localhost:3000/host/, so the page itself cannot derive a join URL
+// players could actually reach. The server knows its LAN addresses; it hands
+// them over here, along with a pre-rendered QR code for the primary one.
+app.get("/api/join-info", (req, res) => {
+  const info = lanInfo.buildJoinInfo(lanInfo.getLanAddresses(), PORT);
+  res.json({ ...info, qrSvg: lanInfo.buildQrSvg(info.primaryJoinUrl) });
 });
 
 const uploadStorage = multer.diskStorage({
@@ -66,16 +80,13 @@ app.post("/api/upload-audio", (req, res) => {
 });
 
 function printLanUrl() {
-  const nets = os.networkInterfaces();
-  const addrs = [];
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === "IPv4" && !net.internal) addrs.push(net.address);
-    }
-  }
+  const { joinUrls } = lanInfo.buildJoinInfo(lanInfo.getLanAddresses(), PORT);
   console.log(`\nServer running on port ${PORT}`);
-  console.log(`Local:  http://localhost:${PORT}`);
-  addrs.forEach((a) => console.log(`Network: http://${a}:${PORT}  <-- use this on phones (same WiFi)`));
+  console.log(`Host:    http://localhost:${PORT}/host/`);
+  joinUrls.forEach((u, i) => console.log(`Players: ${u}${i === 0 ? "  <-- try this one first" : ""}`));
+  if (joinUrls.length === 0) {
+    console.log("No LAN address found - turn WiFi or the hotspot on, then restart.");
+  }
   console.log("");
 }
 
