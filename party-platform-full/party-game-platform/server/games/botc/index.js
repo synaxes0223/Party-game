@@ -131,6 +131,7 @@ function attach(io, socket, ctx) {
     }
 
     nightLoop.startNight(state);
+    maybePromptNightChoice(room, io);
     emitState(room, io);
   });
 
@@ -159,6 +160,7 @@ function attach(io, socket, ctx) {
     }
 
     nightLoop.startNight(state);
+    maybePromptNightChoice(room, io);
     emitState(room, io);
   });
 
@@ -172,11 +174,29 @@ function attach(io, socket, ctx) {
     }
   }
 
+  // Fires whenever the current night step needs a player-driven choice, so
+  // that player's phone gets a targeted, minimal prompt -- matching the
+  // spec's own framing ("the app lights up one phone at a time") rather
+  // than a general state broadcast, which would also leak grimoire-only
+  // information (reminders, other players' alignment) to every player.
+  // Pseudo-steps (minion-info/demon-info) never require a choice, so this
+  // never fires for them.
+  function maybePromptNightChoice(room, io) {
+    if (room.gameState.phase !== "night") return;
+    const step = nightLoop.currentStep(room.gameState);
+    if (!step || !step.requiresChoice) return;
+    io.to(step.seat.playerToken).emit("game:botc-your-turn", {
+      choiceType: step.requiresChoice.type,
+      targets: room.gameState.seats.map((s) => ({ seatId: s.seatId, nickname: s.nickname, alive: s.alive })),
+    });
+  }
+
   socket.on("host:botc-night-choice", ({ code, choice }) => {
     withHostRoom(code, (room) => {
       nightLoop.submitChoice(room.gameState, choice);
       applyWinCheckAndMaybeEnd(room, io);
       maybeEndNight(room);
+      maybePromptNightChoice(room, io);
       emitState(room, io);
     });
   });
@@ -191,6 +211,7 @@ function attach(io, socket, ctx) {
         if (text) io.to(step.seat.playerToken).emit("game:botc-info", { text });
       }
       maybeEndNight(room);
+      maybePromptNightChoice(room, io);
       emitState(room, io);
     });
   });
@@ -237,6 +258,7 @@ function attach(io, socket, ctx) {
     withHostRoom(code, (room) => {
       if (room.gameState.phase === "ended") return;
       nightLoop.startNight(room.gameState);
+      maybePromptNightChoice(room, io);
       emitState(room, io);
     });
   });
