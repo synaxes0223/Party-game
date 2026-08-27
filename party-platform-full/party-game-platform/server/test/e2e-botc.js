@@ -3,7 +3,6 @@
 // full Blood on the Clocktower game through socket.io-client (no mocks).
 // Run with: node test/e2e-botc.js
 
-const path = require("node:path");
 const { io } = require("socket.io-client");
 
 const PORT = 3102;
@@ -133,6 +132,29 @@ async function main() {
     assertTrue(roleEvents.get("Imp").alignment === "evil", "Imp is dealt evil");
     assertTrue(state.phase === "night", "the first night starts automatically after dealing");
     console.log("  PASS -- manual deal assigns the requested characters and starts night 1");
+
+    // ---- Regression: a premature host:botc-vote must not crash the server ----
+    // state.day is still null here (still night 1, before any nomination has
+    // ever happened) -- games/botc/voting.js's castVote dereferences
+    // state.day.currentNomination with no null check, so without a phase
+    // guard in games/botc/index.js's host:botc-vote handler, this would throw
+    // a synchronous TypeError inside the socket.on callback and take down the
+    // whole Node process (every room, not just this one). There is no
+    // incoming "request current state" event in this socket contract, so we
+    // confirm two things instead: the guarded handler emits no host:botc-
+    // state update at all (it returns before touching state or calling
+    // emitState), and the host socket is still connected afterward. Night 1
+    // being driven to completion normally right after this is itself further
+    // proof the process is still alive and serving legitimate events.
+    let prematureVoteProducedState = false;
+    const prematureVoteListener = () => { prematureVoteProducedState = true; };
+    host.once("host:botc-state", prematureVoteListener);
+    host.emit("host:botc-vote", { code: roomCode, seatId: state.seats[0].seatId, voted: true });
+    await new Promise((r) => setTimeout(r, 150)); // give a would-be crash/state-change time to manifest
+    host.off("host:botc-state", prematureVoteListener);
+    assertTrue(!prematureVoteProducedState, "a premature host:botc-vote (before any nomination exists) is a silent no-op, not a state change");
+    assertTrue(host.connected, "the host socket is still connected -- a premature host:botc-vote did not crash the server");
+    console.log("  PASS -- host:botc-vote before any nomination is open does not crash the server and is a no-op");
 
     // Drive the first night, sending the Poisoner's choice specifically at
     // the Empath (seat 2); every other choice-based step (Butler) and every

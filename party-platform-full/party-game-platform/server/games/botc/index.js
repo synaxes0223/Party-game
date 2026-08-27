@@ -166,7 +166,7 @@ function attach(io, socket, ctx) {
   // state.day via voting.startDay -- without this, state.day stays null and
   // the first host:botc-nominate of the day throws.
   function maybeEndNight(room) {
-    if (room.gameState.phase !== "ended" && nightLoop.isNightOver(room.gameState)) {
+    if (room.gameState.phase === "night" && nightLoop.isNightOver(room.gameState)) {
       room.gameState.phase = "day-discussion";
       voting.startDay(room.gameState);
     }
@@ -197,6 +197,7 @@ function attach(io, socket, ctx) {
 
   socket.on("host:botc-nominate", ({ code, nominatorSeatId, nomineeSeatId }) => {
     withHostRoom(code, (room) => {
+      if (room.gameState.phase !== "day-discussion" || !room.gameState.day) return;
       voting.startNomination(room.gameState, nominatorSeatId, nomineeSeatId);
       emitState(room, io);
     });
@@ -204,6 +205,7 @@ function attach(io, socket, ctx) {
 
   socket.on("host:botc-vote", ({ code, seatId, voted }) => {
     withHostRoom(code, (room) => {
+      if (!room.gameState.day || !room.gameState.day.currentNomination) return;
       voting.castVote(room.gameState, seatId, voted);
       emitState(room, io);
     });
@@ -211,6 +213,7 @@ function attach(io, socket, ctx) {
 
   socket.on("host:botc-resolve-vote", ({ code }) => {
     withHostRoom(code, (room) => {
+      if (!room.gameState.day || !room.gameState.day.currentNomination) return;
       voting.resolveNomination(room.gameState);
       emitState(room, io);
     });

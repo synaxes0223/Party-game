@@ -52,7 +52,7 @@ test("evil wins on exact parity, not only when outnumbering good", () => {
     { nickname: "P3", characterId: "poisoner" },
     { nickname: "P4", characterId: "imp" },
   ]);
-  grimoire.setAlive(s.seats[0], false); // 1 good (soldier) left alive, 2 evil left alive
+  // 2 good (washerwoman, soldier) vs 2 evil (poisoner, imp), all alive -- a genuine tie
   const result = winConditions.checkWinCondition(s);
   assert.equal(result.winner, "evil");
 });
