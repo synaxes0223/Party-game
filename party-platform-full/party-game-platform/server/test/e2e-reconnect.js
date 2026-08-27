@@ -48,12 +48,19 @@ async function main() {
   host.emit("host:select-auto-pair", { code });
   await startedPromise;
 
+  // Reveal words now, so player 0 genuinely receives a private message
+  // before dropping -- there is nothing to "re-send" on rejoin otherwise.
+  const originalWordPromise = once(players[0].socket, "game:reveal-word");
+  host.emit("host:reveal-words", { code });
+  const originalWord = await originalWordPromise;
+
   // --- a player drops and returns ---
   players[0].socket.disconnect();
   await new Promise((r) => setTimeout(r, 200));
 
   const returning = connect(URL);
   await once(returning, "connect");
+  const wordAgainPromise = once(returning, "game:reveal-word");
   returning.emit("player:join-room", { code, nickname: "ignored-on-rejoin", token: P1 });
   const rejoin = await once(returning, "player:rejoined");
 
@@ -64,6 +71,15 @@ async function main() {
     throw new Error(`FAIL: expected 3 seats, saw ${rejoin.room.players.length}`);
   }
   console.log("  PASS — a mid-game disconnect keeps the seat and the same token reclaims it");
+
+  const wordAgain = await wordAgainPromise;
+  if (!wordAgain || !wordAgain.word) {
+    throw new Error("FAIL: a rejoining player was not re-sent their word");
+  }
+  if (wordAgain.word !== originalWord.word) {
+    throw new Error(`FAIL: rejoin word "${wordAgain.word}" does not match the original "${originalWord.word}"`);
+  }
+  console.log("  PASS — a rejoining player is re-sent their private state");
 
   // --- a stranger still cannot walk in ---
   const stranger = connect(URL);

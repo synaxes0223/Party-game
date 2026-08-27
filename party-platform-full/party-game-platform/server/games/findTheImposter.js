@@ -337,6 +337,17 @@ function onPlayerLeft(room, io, socketId) {
   return {};
 }
 
+// A reconnecting player lost their audio track assignment. Per the plan's
+// stated limitation, this does not resynchronise playback position -- the
+// player rejoins ready for the next game:play-at.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs) return;
+  const track = getTrackForPlayer(gs, playerId);
+  if (!track) return;
+  io.to(playerId).emit("game:load-audio", { gameId: meta.id, ...track });
+}
+
 module.exports = {
   meta,
   getTrackPairs,
@@ -352,4 +363,5 @@ module.exports = {
   onVote,
   onNextRound,
   onPlayerLeft,
+  onPlayerRejoined,
 };

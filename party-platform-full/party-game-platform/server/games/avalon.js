@@ -406,6 +406,25 @@ function onPlayerLeft(room, io, socketId) {
   broadcastResults(room, io);
 }
 
+// A reconnecting player lost their private role reveal. computeKnowledge is
+// cheap and pure, so recompute it from the stored roles/nicknames rather than
+// persisting the transient Map that onStartGame only used once.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase === "game-over") return;
+  const knowledge = computeKnowledge(gs.roles, gs.nicknames);
+  const k = knowledge.get(playerId);
+  if (k) {
+    io.to(playerId).emit("game:avalon-role", {
+      role: k.role,
+      team: k.team,
+      evilPlayers: k.evilPlayers,
+      percivalPair: k.percivalPair,
+    });
+  }
+  broadcastState(room, io);
+}
+
 module.exports = {
   meta,
   getRoleTable,
@@ -423,4 +442,5 @@ module.exports = {
   onNextRound,
   onAssassinGuess,
   onPlayerLeft,
+  onPlayerRejoined,
 };

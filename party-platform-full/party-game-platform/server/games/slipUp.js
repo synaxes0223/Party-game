@@ -133,4 +133,16 @@ function onPlayerLeft(room, io, socketId) {
   }
 }
 
-module.exports = { meta, getEntryPool, onStartGame, onMarkCaught, onEndGame, onPlayerLeft };
+// A reconnecting player lost their private view of everyone else's entry.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "active") return;
+  if (!room.players.has(playerId)) return;
+  const players = Array.from(room.players.values());
+  const others = players
+    .filter((p) => p.id !== playerId)
+    .map((p) => ({ id: p.id, nickname: p.nickname, entry: gs.assignments.get(p.id) }));
+  io.to(playerId).emit("game:your-view", { others });
+}
+
+module.exports = { meta, getEntryPool, onStartGame, onMarkCaught, onEndGame, onPlayerLeft, onPlayerRejoined };

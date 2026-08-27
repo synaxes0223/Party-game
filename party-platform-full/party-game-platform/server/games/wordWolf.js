@@ -235,6 +235,15 @@ function onPlayerLeft(room, io, socketId) {
   return {};
 }
 
+// A reconnecting player lost the private word we sent to their old socket.
+// Only re-send if the word has actually been revealed this round -- before
+// that, nothing was sent yet, and the normal reveal broadcast will cover them.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase === "loading") return;
+  io.to(playerId).emit("game:reveal-word", { gameId: meta.id, word: getWordForPlayer(gs, playerId) });
+}
+
 module.exports = {
   meta,
   onSelectAutoPair,
@@ -243,4 +252,5 @@ module.exports = {
   onVote,
   onNextRound,
   onPlayerLeft,
+  onPlayerRejoined,
 };
