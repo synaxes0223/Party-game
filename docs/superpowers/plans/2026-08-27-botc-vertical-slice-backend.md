@@ -2622,18 +2622,28 @@ function effectiveVoteCount(state, votes) {
   return count;
 }
 
+// NOTE: gating this on requiredVotes() (max(simpleMajority, currentHighest+1))
+// was tried first and is a self-contradiction -- that gate always requires
+// strictly more than currentHighest, so the tie case (votes === currentHighest)
+// can never pass it, making the "tie clears the block" rule below unreachable.
+// requiredVotes() stays useful as "the minimum guaranteed to replace the
+// block outright" (a legitimate thing to show a Storyteller), but resolution
+// itself must gate on the simple majority alone, then compare directly
+// against whatever's currently on the block.
 function resolveNomination(state) {
   const nomination = state.day.currentNomination;
   const votes = effectiveVoteCount(state, nomination.votes);
-  const threshold = requiredVotes(state);
+  const aliveCount = stateModule.aliveSeats(state).length;
+  const simpleMajority = Math.ceil(aliveCount / 2);
 
   let onBlock = state.day.onBlock;
-  if (votes >= threshold) {
-    if (state.day.onBlock && votes === state.day.onBlock.votes) {
-      onBlock = null; // a tie with the current highest clears the block
-    } else {
+  if (votes >= simpleMajority) {
+    if (!onBlock || votes > onBlock.votes) {
       onBlock = { seatId: nomination.nomineeSeatId, votes };
+    } else if (votes === onBlock.votes) {
+      onBlock = null; // a tie with the current highest clears the block
     }
+    // votes < onBlock.votes: no change, the existing block stands
   }
   state.day.onBlock = onBlock;
   state.day.currentNomination = null;
