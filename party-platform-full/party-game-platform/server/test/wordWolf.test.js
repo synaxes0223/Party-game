@@ -194,6 +194,27 @@ test("a second round picks an auto pair not used in round 1 (until the pool is e
   assert.notEqual(room.gameState.wordPair.normal.word, firstNormalWord);
 });
 
+test("a disconnected player is excluded from vote quorum, letting the round resolve without their input", () => {
+  const room = makeRoom(["A", "B", "C", "D"]);
+  const { io } = makeStubIo();
+  game.onSelectCustomPair(room, io, { normalWord: "Coffee", imposterWord: "Tea" });
+
+  // p4 drops mid-game but keeps their seat in room.players (durable-session
+  // reconnect model) -- only their connected flag flips.
+  room.players.get("p4").connected = false;
+  game.onHostReveal(room, io);
+
+  game.onVote(room, io, "p1", "skip");
+  game.onVote(room, io, "p2", "skip");
+  assert.equal(room.gameState.phase, "voting");
+
+  // Without the fix, votes.size (3) never reaches the inflated
+  // activeIds.length (4, since p4 is still counted), so the round would stay
+  // stuck in "voting" forever.
+  game.onVote(room, io, "p3", "skip");
+  assert.equal(room.gameState.phase, "round-results");
+});
+
 test("onPlayerLeft removes a pending vote and lets the round resolve with one fewer voter", () => {
   const room = makeRoom(["A", "B", "C", "D"]);
   const { io } = makeStubIo();

@@ -218,6 +218,32 @@ test("onPlayerLeft removes a pending vote and lets the round resolve with one fe
   assert.equal(room.gameState.phase, "round-results");
 });
 
+test("a disconnected player is excluded from vote quorum, letting the round resolve without their input", () => {
+  const room = makeRoom(["A", "B", "C", "D"]);
+  const { io } = makeStubIo();
+  game.onSelectTrackPair(room, io, "pair1");
+
+  // p4 drops mid-game but keeps their seat in room.players (durable-session
+  // reconnect model) -- only their connected flag flips.
+  room.players.get("p4").connected = false;
+
+  const activeIds = ["p1", "p2", "p3"];
+  activeIds.forEach((id) => game.onPlayerReady(room, io, id));
+
+  // Without the fix, getActivePlayerIds still counts p4, so readyToPlay.size
+  // (3) never reaches activeIds.length (4) and this errors instead.
+  const playResult = game.onHostPlay(room, io);
+  assert.deepEqual(playResult, {});
+  assert.equal(room.gameState.phase, "playing");
+
+  activeIds.forEach((id) => game.onVote(room, io, id, "skip"));
+
+  // Without the fix, votes.size (3) never reaches the inflated
+  // activeIds.length (4), so the round would stay stuck in "voting" forever.
+  assert.equal(room.gameState.phase, "round-results");
+  assert.equal(room.gameState.votes.size, 3);
+});
+
 test("an eliminated player is excluded from audio and votes in the following round", () => {
   const room = makeRoom(["A", "B", "C", "D"]);
   const { io, emitted } = makeStubIo();

@@ -41,7 +41,11 @@ function getUploadedFiles() {
 
 function getActivePlayerIds(room) {
   const eliminated = room.gameState ? room.gameState.eliminated : new Set();
-  return Array.from(room.players.keys()).filter((id) => !eliminated.has(id));
+  return Array.from(room.players.keys()).filter((id) => {
+    if (eliminated.has(id)) return false;
+    const player = room.players.get(id);
+    return !player || player.connected !== false;
+  });
 }
 
 function getTrackForPlayer(gs, pid) {

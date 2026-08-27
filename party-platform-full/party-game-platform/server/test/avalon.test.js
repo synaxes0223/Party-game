@@ -323,6 +323,40 @@ test("onTeamVote: majority approve moves to quest phase", () => {
   assert.equal(resultEmit.payload.votes.length, 5);
 });
 
+test("onTeamVote excludes a disconnected player from quorum, resolving once the remaining players have voted", () => {
+  const room = proposedRoom(FIVE);
+  // One player drops mid-vote but keeps their seat in room.players (durable-
+  // session reconnect model) -- only their connected flag flips.
+  const disconnectedId = room.gameState.playerOrder[4];
+  room.players.get(disconnectedId).connected = false;
+
+  const { io, emitted } = makeStubIo();
+  const voters = room.gameState.playerOrder.filter((id) => id !== disconnectedId);
+  // Without the fix, teamVotes.size (4) never reaches the inflated
+  // playerOrder.length (5, since the disconnected player is still counted),
+  // so the vote would stay stuck in "team-vote" forever.
+  voters.forEach((id) => game.onTeamVote(room, io, id, true));
+
+  assert.equal(room.gameState.phase, "quest");
+  const resultEmit = emitted.find((e) => e.event === "game:avalon-team-vote-result");
+  assert.equal(resultEmit.payload.approved, true);
+  assert.equal(resultEmit.payload.votes.length, 4);
+});
+
+test("onTeamVote does not resolve if every player is currently disconnected (waits rather than dividing by zero)", () => {
+  const room = proposedRoom(FIVE);
+  room.gameState.playerOrder.forEach((id) => {
+    room.players.get(id).connected = false;
+  });
+  const { io, emitted } = makeStubIo();
+  // Without the connected-count > 0 guard, teamVotes.size (1) >= connectedCount
+  // (0) would be true and this single vote would incorrectly resolve the
+  // round with nobody real having voted.
+  game.onTeamVote(room, io, room.gameState.playerOrder[0], true);
+  assert.equal(room.gameState.phase, "team-vote");
+  assert.equal(emitted.find((e) => e.event === "game:avalon-team-vote-result"), undefined);
+});
+
 test("onTeamVote: majority reject rotates leader and returns to team-proposal", () => {
   const room = proposedRoom(FIVE);
   const startingLeader = room.gameState.leaderIndex;
@@ -399,6 +433,41 @@ test("onQuestVote: all-success resolves the quest as success and advances to que
   assert.equal(room.gameState.rejectionCount, 0);
   const resultEmit = emitted.find((e) => e.event === "game:avalon-quest-result");
   assert.equal(resultEmit.payload.outcome, "success");
+});
+
+test("onQuestVote excludes a disconnected team member from quorum, resolving once the remaining members have voted", () => {
+  const room = questRoom(FIVE);
+  const team = room.gameState.currentTeam;
+  // One team member drops mid-vote but keeps their seat in room.players
+  // (durable-session reconnect model) -- only their connected flag flips.
+  const disconnectedId = team[0];
+  room.players.get(disconnectedId).connected = false;
+  const remainingTeam = team.slice(1);
+
+  const { io, emitted } = makeStubIo();
+  // Without the fix, questVotes.size never reaches the inflated
+  // currentTeam.length (still counting the disconnected member), so the
+  // quest would stay stuck in "quest" forever.
+  remainingTeam.forEach((id) => game.onQuestVote(room, io, id, true));
+
+  assert.equal(room.gameState.phase, "quest-result");
+  const resultEmit = emitted.find((e) => e.event === "game:avalon-quest-result");
+  assert.equal(resultEmit.payload.outcome, "success");
+});
+
+test("onQuestVote does not resolve if every team member is currently disconnected (waits rather than dividing by zero)", () => {
+  const room = questRoom(FIVE);
+  const team = room.gameState.currentTeam;
+  team.forEach((id) => {
+    room.players.get(id).connected = false;
+  });
+  const { io, emitted } = makeStubIo();
+  // Without the connected-count > 0 guard, questVotes.size (1) >=
+  // connectedCount (0) would be true and this single vote would incorrectly
+  // resolve the quest with nobody real having voted.
+  game.onQuestVote(room, io, team[0], true);
+  assert.equal(room.gameState.phase, "quest");
+  assert.equal(emitted.find((e) => e.event === "game:avalon-quest-result"), undefined);
 });
 
 test("onQuestVote: 3rd failed quest ends the game with Evil winning", () => {

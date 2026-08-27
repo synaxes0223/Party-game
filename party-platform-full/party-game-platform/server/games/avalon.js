@@ -142,6 +142,18 @@ function getPlayerIds(room) {
   return Array.from(room.players.keys());
 }
 
+// Counts how many of `ids` are currently connected, for quorum checks (team
+// vote / quest vote) that must wait only on players who can actually still
+// act. A missing/undefined `connected` field counts as connected (keeps
+// pre-session-token fixtures working); only an explicit `connected === false`
+// excludes a player.
+function countConnected(room, ids) {
+  return ids.filter((id) => {
+    const player = room.players.get(id);
+    return !player || player.connected !== false;
+  }).length;
+}
+
 function broadcastRoles(room, io, knowledge) {
   for (const [id, k] of knowledge.entries()) {
     io.to(id).emit("game:avalon-role", {
@@ -301,7 +313,8 @@ function onTeamVote(room, io, socketId, approve) {
   if (!gs.playerOrder.includes(socketId)) return;
   gs.teamVotes.set(socketId, !!approve);
 
-  if (gs.teamVotes.size === gs.playerOrder.length) {
+  const connectedCount = countConnected(room, gs.playerOrder);
+  if (connectedCount > 0 && gs.teamVotes.size >= connectedCount) {
     resolveTeamVote(room, io);
   }
 }
@@ -354,7 +367,8 @@ function onQuestVote(room, io, socketId, success) {
 
   gs.questVotes.set(socketId, !!success);
 
-  if (gs.questVotes.size === gs.currentTeam.length) {
+  const connectedCount = countConnected(room, gs.currentTeam);
+  if (connectedCount > 0 && gs.questVotes.size >= connectedCount) {
     advanceAfterQuestVotes(room, io);
   }
 }
