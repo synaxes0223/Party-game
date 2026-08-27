@@ -34,6 +34,8 @@ function getModule(characterId) {
       soldier: require("./soldier"),
       poisoner: require("./poisoner"),
       butler: require("./butler"),
+      imp: require("./imp"),
+      baron: require("./baron"),
     };
   }
   return modulesById[characterId] || null;
