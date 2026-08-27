@@ -201,6 +201,23 @@ function attach(io, socket, ctx) {
     });
   });
 
+  // The player-driven counterpart to host:botc-night-choice. A "your turn"
+  // prompt (Task 1) is not proof of anything by itself -- this independently
+  // re-derives whose turn it currently is and rejects anyone else, exactly
+  // as if the prompt had never been sent.
+  socket.on("player:botc-night-choice", ({ code, choice }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameState || room.gameId !== meta.id) return;
+    const step = nightLoop.currentStep(room.gameState);
+    if (!step || !step.requiresChoice) return;
+    if (step.seat.playerToken !== socket.data.token) return;
+    nightLoop.submitChoice(room.gameState, choice);
+    applyWinCheckAndMaybeEnd(room, io);
+    maybeEndNight(room);
+    maybePromptNightChoice(room, io);
+    emitState(room, io);
+  });
+
   socket.on("host:botc-night-candidate", ({ code, candidateId }) => {
     withHostRoom(code, (room) => {
       const step = nightLoop.currentStep(room.gameState);
