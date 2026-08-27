@@ -69,7 +69,7 @@ function attemptJoin() {
     document.getElementById("join-error").textContent = "Enter both room code and your name.";
     return;
   }
-  socket.emit("player:join-room", { code, nickname });
+  socket.emit("player:join-room", { code, nickname, token: window.sessionToken });
 }
 
 socket.on("player:join-error", ({ error }) => {
@@ -77,6 +77,15 @@ socket.on("player:join-error", ({ error }) => {
 });
 
 socket.on("player:joined", ({ room }) => {
+  roomCode = room.code;
+  renderPlayerList(room.players);
+  showScreen("waiting");
+});
+
+// A rejoin lands here instead of player:joined. The room view is the same
+// shape, so reuse the same screen transition; the game module re-sends this
+// player's private state separately.
+socket.on("player:rejoined", ({ room }) => {
   roomCode = room.code;
   renderPlayerList(room.players);
   showScreen("waiting");

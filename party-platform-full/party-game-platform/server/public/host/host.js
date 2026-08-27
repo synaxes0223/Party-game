@@ -37,7 +37,7 @@ function showScreen(name) {
 }
 
 document.getElementById("btn-create-room").addEventListener("click", () => {
-  socket.emit("host:create-room");
+  socket.emit("host:create-room", { token: window.sessionToken });
 });
 
 // The host screen is normally opened on the host's own device, where
