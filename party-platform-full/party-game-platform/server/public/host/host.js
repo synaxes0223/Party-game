@@ -1,5 +1,16 @@
 const socket = io();
 
+// The host tab lives on the phone that is also running the server, so Android
+// backgrounding it is routine. On every (re)connect, try to walk back into the
+// room this tab was last hosting.
+socket.on("connect", () => {
+  let lastCode = null;
+  try { lastCode = localStorage.getItem("party-host-room"); } catch (err) {}
+  if (lastCode) {
+    socket.emit("host:reclaim-room", { code: lastCode, token: window.sessionToken });
+  }
+});
+
 let roomCode = null;
 let selectedGameId = null;
 let hasStartedFirstRound = false;
@@ -104,6 +115,7 @@ async function applyYoutubeAvailability() {
 }
 
 socket.on("host:room-created", ({ room, games }) => {
+  try { localStorage.setItem("party-host-room", room.code); } catch (err) {}
   roomCode = room.code;
   document.getElementById("room-code").textContent = room.code;
   renderJoinInfo();
@@ -114,6 +126,22 @@ socket.on("host:room-created", ({ room, games }) => {
 
 socket.on("host:room-updated", ({ room }) => {
   renderPlayers(room.players);
+});
+
+socket.on("host:room-reclaimed", ({ room, games }) => {
+  roomCode = room.code;
+  document.getElementById("room-code").textContent = room.code;
+  renderJoinInfo();
+  gamesById = Object.fromEntries(games.map((g) => [g.id, g]));
+  renderGameList(games);
+  renderPlayers(room.players);
+  showScreen("lobby");
+});
+
+socket.on("host:reclaim-failed", () => {
+  // The room is gone (swept, or the server restarted). Forget it so the next
+  // connect does not keep asking.
+  try { localStorage.removeItem("party-host-room"); } catch (err) {}
 });
 
 function renderPlayers(players) {
