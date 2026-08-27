@@ -280,6 +280,90 @@ async function main() {
     host.disconnect();
     players.forEach((p) => p.socket.close());
 
+    // ---- Scenario 2: player-driven night choice and vote, plus an off-turn vote is rejected ----
+    console.log("\n[Scenario 2] A player acts on their own turn via player:botc-night-choice and player:botc-vote");
+    const room2 = await createRoom();
+    const players2 = await joinPlayers(room2.roomCode, ["Poisoner2", "Empath2", "Soldier2", "Butler2", "Imp2"]);
+
+    // Registered before dealing even happens -- this deal includes both a
+    // Minion and a Demon, so minion-info and demon-info both run BEFORE the
+    // Poisoner (see nightOrder.js's FIRST_NIGHT_ORDER), and neither is a
+    // choice step, so no prompt fires for them. Registering the listener
+    // this early means it can't be missed no matter how many non-choice
+    // steps precede the Poisoner's actual turn.
+    const yourTurnPromise = once(players2[0].socket, "game:botc-your-turn"); // Poisoner2, seat 1
+    const dealStatePromise = once(room2.host, "host:botc-state");
+    room2.host.emit("host:botc-manual-deal", {
+      code: room2.roomCode,
+      assignments: [
+        { seatId: 1, characterId: "poisoner" },
+        { seatId: 2, characterId: "empath" },
+        { seatId: 3, characterId: "soldier" },
+        { seatId: 4, characterId: "butler" },
+        { seatId: 5, characterId: "imp" },
+      ],
+    });
+    let state2 = (await dealStatePromise).state;
+
+    // Drive past minion-info and demon-info (candidate-based, no
+    // player-turn prompt) via the host, until nightStep reaches the
+    // Poisoner -- exactly like driveNightToEnd would, but done manually
+    // here since this scenario needs to stop partway through the night
+    // rather than drive it to completion in one call.
+    let pseudoStepGuard = 0;
+    while (state2.nightStep && state2.nightStep.stepId !== "poisoner" && pseudoStepGuard < 5) {
+      pseudoStepGuard++;
+      const p = once(room2.host, "host:botc-state");
+      const candidates = state2.nightStep.candidates;
+      room2.host.emit("host:botc-night-candidate", { code: room2.roomCode, candidateId: candidates.length ? candidates[0].id : null });
+      state2 = (await p).state;
+    }
+    assertTrue(state2.nightStep && state2.nightStep.stepId === "poisoner", "the Poisoner's turn comes right after the pseudo-steps in this deal");
+
+    const yourTurn = await yourTurnPromise;
+    assertTrue(yourTurn.choiceType === "select-one-player", "the prompt names the correct choice type");
+    assertTrue(yourTurn.targets.length === 5, "the prompt lists every seat as a potential target");
+    console.log("  PASS -- the Poisoner's phone receives a targeted game:botc-your-turn prompt");
+
+    const empathSeat2Id = state2.seats.find((s) => s.nickname === "Empath2").seatId;
+    const afterChoicePromise = once(room2.host, "host:botc-state");
+    players2[0].socket.emit("player:botc-night-choice", { code: room2.roomCode, choice: { targetSeatId: empathSeat2Id } });
+    state2 = (await afterChoicePromise).state;
+    const empathAfter = state2.seats.find((s) => s.seatId === empathSeat2Id);
+    assertTrue(empathAfter.reminders.some((r) => r.kind === "poisoned"), "the player-submitted choice applied the poison, same as a host-submitted one would");
+    console.log("  PASS -- player:botc-night-choice has the same effect as the host-entered equivalent");
+
+    state2 = await driveNightToEnd(room2.host, room2.roomCode, state2, (step, s) => firstOtherAliveSeat(step, s));
+    assertTrue(state2.phase === "day-discussion", "the first night completes normally after the player-submitted step");
+
+    const impSeat2 = state2.seats.find((s) => s.nickname === "Imp2");
+    const poisonerSeat2 = state2.seats.find((s) => s.nickname === "Poisoner2");
+    const voteTurnPromise = once(players2[0].socket, "game:botc-your-turn-to-vote"); // Poisoner2 votes first per seating order from seat 5 (Imp) as nominee -> starts at seat 1
+    const nominatePromise2 = once(room2.host, "host:botc-state");
+    room2.host.emit("host:botc-nominate", { code: room2.roomCode, nominatorSeatId: empathSeat2Id, nomineeSeatId: impSeat2.seatId });
+    const voteTurn = await voteTurnPromise;
+    state2 = (await nominatePromise2).state;
+    assertTrue(voteTurn.nomineeSeatId === impSeat2.seatId, "the vote-turn prompt names the correct nominee");
+    console.log("  PASS -- the first voter's phone receives a targeted game:botc-your-turn-to-vote prompt");
+
+    // An off-turn player (Butler2, not the current voter) tries to vote --
+    // must be silently ignored, not accepted.
+    const butlerSeat2 = state2.seats.find((s) => s.nickname === "Butler2");
+    const butlerSocket2 = players2.find((p) => p.name === "Butler2").socket;
+    butlerSocket2.emit("player:botc-vote", { code: room2.roomCode, voted: true });
+    await new Promise((r) => setTimeout(r, 150)); // give a wrongly-accepted vote time to land before we check
+    const stateAfterOffTurnAttempt = await new Promise((resolve) => {
+      room2.host.once("host:botc-state", resolve);
+      room2.host.emit("host:botc-vote", { code: room2.roomCode, seatId: poisonerSeat2.seatId, voted: true }); // the real current voter votes, forcing a fresh state emit to inspect
+    });
+    const votesSoFar = stateAfterOffTurnAttempt.state.day.currentNomination.votes;
+    assertTrue(!votesSoFar.some((v) => v.seatId === butlerSeat2.seatId), "the off-turn player's vote was rejected, not recorded");
+    assertTrue(votesSoFar.some((v) => v.seatId === poisonerSeat2.seatId), "the genuine current voter's vote (submitted via host:botc-vote here) was recorded");
+    console.log("  PASS -- an off-turn player:botc-vote attempt is silently rejected");
+
+    room2.host.disconnect();
+    players2.forEach((p) => p.socket.close());
+
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
     process.exit(0);
