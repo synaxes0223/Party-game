@@ -343,6 +343,32 @@ test("onTeamVote excludes a disconnected player from quorum, resolving once the 
   assert.equal(resultEmit.payload.votes.length, 4);
 });
 
+test("onTeamVote: a stale vote from a player who has since disconnected does not let the vote resolve before every remaining connected player has voted", () => {
+  const room = proposedRoom(FIVE);
+  const [p1, p2, p3, p4, p5] = room.gameState.playerOrder;
+  const { io } = makeStubIo();
+
+  // p1 votes while still connected...
+  game.onTeamVote(room, io, p1, true);
+  // ...then disconnects, but keeps their seat in room.players (durable-
+  // session reconnect model) -- their already-cast vote stays in gs.teamVotes.
+  room.players.get(p1).connected = false;
+
+  game.onTeamVote(room, io, p2, true);
+  game.onTeamVote(room, io, p3, true);
+  game.onTeamVote(room, io, p4, true);
+
+  // teamVotes.size is now 4 (p1's stale vote + p2 + p3 + p4), matching the
+  // naive connected-player count (p2, p3, p4, p5) -- but p5, still
+  // connected, never voted. A size-only quorum check would incorrectly
+  // resolve here; the vote must instead keep waiting for p5.
+  assert.equal(room.gameState.phase, "team-vote");
+  assert.equal(room.gameState.teamVotes.size, 4);
+
+  game.onTeamVote(room, io, p5, true);
+  assert.equal(room.gameState.phase, "quest");
+});
+
 test("onTeamVote does not resolve if every player is currently disconnected (waits rather than dividing by zero)", () => {
   const room = proposedRoom(FIVE);
   room.gameState.playerOrder.forEach((id) => {
@@ -433,6 +459,40 @@ test("onQuestVote: all-success resolves the quest as success and advances to que
   assert.equal(room.gameState.rejectionCount, 0);
   const resultEmit = emitted.find((e) => e.event === "game:avalon-quest-result");
   assert.equal(resultEmit.payload.outcome, "success");
+});
+
+test("onQuestVote: a stale vote from a player who has since disconnected does not let the quest resolve before every remaining connected team member has voted", () => {
+  const room = questRoom(FIVE);
+  const [p1, p2, p3, p4, p5] = room.gameState.playerOrder;
+  // Override the (real, size-2) currentTeam with the full 5-player roster --
+  // onQuestVote itself doesn't validate team size (only onProposeTeam does),
+  // so this is a valid way to exercise the quorum logic with enough members
+  // to show "some but not all connected members voted" distinctly. Voting
+  // only `true` throughout means no player's role matters here (the
+  // Evil-only-fail check only triggers on a `false` vote).
+  room.gameState.currentTeam = [p1, p2, p3, p4, p5];
+  room.gameState.questVotes = new Map();
+  const { io } = makeStubIo();
+
+  // p1 votes while still connected...
+  game.onQuestVote(room, io, p1, true);
+  // ...then disconnects, but keeps their seat in room.players (durable-
+  // session reconnect model) -- their already-cast vote stays in gs.questVotes.
+  room.players.get(p1).connected = false;
+
+  game.onQuestVote(room, io, p2, true);
+  game.onQuestVote(room, io, p3, true);
+  game.onQuestVote(room, io, p4, true);
+
+  // questVotes.size is now 4 (p1's stale vote + p2 + p3 + p4), matching the
+  // naive connected-player count (p2, p3, p4, p5) -- but p5, still
+  // connected, never voted. A size-only quorum check would incorrectly
+  // resolve here; the quest must instead keep waiting for p5.
+  assert.equal(room.gameState.phase, "quest");
+  assert.equal(room.gameState.questVotes.size, 4);
+
+  game.onQuestVote(room, io, p5, true);
+  assert.equal(room.gameState.phase, "quest-result");
 });
 
 test("onQuestVote excludes a disconnected team member from quorum, resolving once the remaining members have voted", () => {

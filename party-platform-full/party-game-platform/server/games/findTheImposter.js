@@ -143,7 +143,7 @@ function onPlayerReady(room, io, socketId) {
     total: activeIds.length,
   });
 
-  if (gs.readyToPlay.size >= activeIds.length) {
+  if (activeIds.every((id) => gs.readyToPlay.has(id))) {
     io.to(room.hostId).emit("game:all-ready");
   }
   return {};
@@ -168,7 +168,7 @@ function onHostPlay(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "loading") return { error: "Not ready to play." };
   const activeIds = getActivePlayerIds(room);
-  if (gs.readyToPlay.size < activeIds.length) return { error: "Not all players are ready yet." };
+  if (!activeIds.every((id) => gs.readyToPlay.has(id))) return { error: "Not all players are ready yet." };
 
   const startAt = Date.now() + SYNC_BUFFER_MS;
   gs.phase = "playing";
@@ -237,7 +237,7 @@ function onVote(room, io, socketId, votedForId) {
     total: activeIds.length,
   });
 
-  if (gs.votes.size >= activeIds.length) {
+  if (activeIds.every((id) => gs.votes.has(id))) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
@@ -326,9 +326,12 @@ function onPlayerLeft(room, io, socketId) {
     return {};
   }
 
-  if (gs.phase === "loading" && gs.readyToPlay.size >= activeIds.length) {
+  if (gs.phase === "loading" && activeIds.every((id) => gs.readyToPlay.has(id))) {
     io.to(room.hostId).emit("game:all-ready");
-  } else if ((gs.phase === "playing" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
+  } else if (
+    (gs.phase === "playing" || gs.phase === "voting") &&
+    activeIds.every((id) => gs.votes.has(id))
+  ) {
     resolveRoundAndAdvance(room, io);
   }
   return {};

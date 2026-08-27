@@ -142,16 +142,18 @@ function getPlayerIds(room) {
   return Array.from(room.players.keys());
 }
 
-// Counts how many of `ids` are currently connected, for quorum checks (team
-// vote / quest vote) that must wait only on players who can actually still
-// act. A missing/undefined `connected` field counts as connected (keeps
-// pre-session-token fixtures working); only an explicit `connected === false`
-// excludes a player.
-function countConnected(room, ids) {
+// Filters `ids` down to the currently-connected ones, for quorum checks
+// (team vote / quest vote) that must wait on every player who can actually
+// still act -- not just on a vote count, since a stale vote cast before a
+// player disconnected must not stand in for a still-connected player who
+// hasn't voted yet. A missing/undefined `connected` field counts as
+// connected (keeps pre-session-token fixtures working); only an explicit
+// `connected === false` excludes a player.
+function getConnectedIds(room, ids) {
   return ids.filter((id) => {
     const player = room.players.get(id);
     return !player || player.connected !== false;
-  }).length;
+  });
 }
 
 function broadcastRoles(room, io, knowledge) {
@@ -313,8 +315,8 @@ function onTeamVote(room, io, socketId, approve) {
   if (!gs.playerOrder.includes(socketId)) return;
   gs.teamVotes.set(socketId, !!approve);
 
-  const connectedCount = countConnected(room, gs.playerOrder);
-  if (connectedCount > 0 && gs.teamVotes.size >= connectedCount) {
+  const connectedIds = getConnectedIds(room, gs.playerOrder);
+  if (connectedIds.length > 0 && connectedIds.every((id) => gs.teamVotes.has(id))) {
     resolveTeamVote(room, io);
   }
 }
@@ -367,8 +369,8 @@ function onQuestVote(room, io, socketId, success) {
 
   gs.questVotes.set(socketId, !!success);
 
-  const connectedCount = countConnected(room, gs.currentTeam);
-  if (connectedCount > 0 && gs.questVotes.size >= connectedCount) {
+  const connectedIds = getConnectedIds(room, gs.currentTeam);
+  if (connectedIds.length > 0 && connectedIds.every((id) => gs.questVotes.has(id))) {
     advanceAfterQuestVotes(room, io);
   }
 }

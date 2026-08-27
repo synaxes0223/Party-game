@@ -138,7 +138,7 @@ function onVote(room, io, socketId, votedForId) {
     total: activeIds.length,
   });
 
-  if (gs.votes.size >= activeIds.length) {
+  if (activeIds.every((id) => gs.votes.has(id))) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
@@ -226,7 +226,10 @@ function onPlayerLeft(room, io, socketId) {
     return {};
   }
 
-  if ((gs.phase === "revealed" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
+  if (
+    (gs.phase === "revealed" || gs.phase === "voting") &&
+    activeIds.every((id) => gs.votes.has(id))
+  ) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
