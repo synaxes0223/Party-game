@@ -1,8 +1,7 @@
 // characters/index.js
-// The team registry for this plan's seven Trouble Brewing characters. The
-// character *modules* (night behavior) are added in later tasks and
-// registered here too, once they exist -- this file starts as pure team
-// data so dealing can be built and tested before any night logic does.
+// The registry: character id -> team, and (once a module has night
+// behavior) character id -> module. teamOf/charactersOfTeam are pure data
+// lookups every other file uses instead of hard-coding team lists.
 
 const TEAM_OF = {
   washerwoman: "townsfolk",
@@ -24,4 +23,18 @@ function charactersOfTeam(team) {
   return ALL_CHARACTER_IDS.filter((id) => TEAM_OF[id] === team);
 }
 
-module.exports = { TEAM_OF, ALL_CHARACTER_IDS, teamOf, charactersOfTeam };
+// Populated lazily (not at module load) to avoid a require() cycle: the
+// character modules themselves require this file for teamOf/charactersOfTeam.
+let modulesById = null;
+function getModule(characterId) {
+  if (!modulesById) {
+    modulesById = {
+      washerwoman: require("./washerwoman"),
+      empath: require("./empath"),
+      soldier: require("./soldier"),
+    };
+  }
+  return modulesById[characterId] || null;
+}
+
+module.exports = { TEAM_OF, ALL_CHARACTER_IDS, teamOf, charactersOfTeam, getModule };
