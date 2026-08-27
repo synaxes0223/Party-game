@@ -43,7 +43,7 @@ function broadcastRefereeView(room, io) {
     nickname: p.nickname,
     entry: gs.assignments.get(p.id),
   }));
-  io.to(room.hostSocketId).emit("game:referee-view", { players });
+  io.to(room.hostId).emit("game:referee-view", { players });
 }
 
 function broadcastScore(room, io) {

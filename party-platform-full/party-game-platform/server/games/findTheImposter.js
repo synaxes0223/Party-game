@@ -91,7 +91,7 @@ function startRound(room, io, songPair) {
     io.to(pid).emit("game:load-audio", { gameId: meta.id, ...track });
   }
 
-  io.to(room.hostSocketId).emit("game:started", {
+  io.to(room.hostId).emit("game:started", {
     round: gs.round,
     playerCount: activeIds.length,
   });
@@ -134,13 +134,13 @@ function onPlayerReady(room, io, socketId) {
   gs.readyToPlay.add(socketId);
 
   const activeIds = getActivePlayerIds(room);
-  io.to(room.hostSocketId).emit("game:ready-progress", {
+  io.to(room.hostId).emit("game:ready-progress", {
     ready: gs.readyToPlay.size,
     total: activeIds.length,
   });
 
   if (gs.readyToPlay.size >= activeIds.length) {
-    io.to(room.hostSocketId).emit("game:all-ready");
+    io.to(room.hostId).emit("game:all-ready");
   }
   return {};
 }
@@ -228,7 +228,7 @@ function onVote(room, io, socketId, votedForId) {
   gs.phase = "voting";
   gs.votes.set(socketId, votedForId);
 
-  io.to(room.hostSocketId).emit("game:vote-progress", {
+  io.to(room.hostId).emit("game:vote-progress", {
     voted: gs.votes.size,
     total: activeIds.length,
   });
@@ -292,7 +292,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "round-results") return { error: "No round result to advance from." };
   gs.phase = "track-select";
-  io.to(room.hostSocketId).emit("game:track-pairs", { pairs: getTrackPairs() });
+  io.to(room.hostId).emit("game:track-pairs", { pairs: getTrackPairs() });
   return {};
 }
 
@@ -323,7 +323,7 @@ function onPlayerLeft(room, io, socketId) {
   }
 
   if (gs.phase === "loading" && gs.readyToPlay.size >= activeIds.length) {
-    io.to(room.hostSocketId).emit("game:all-ready");
+    io.to(room.hostId).emit("game:all-ready");
   } else if ((gs.phase === "playing" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
     resolveRoundAndAdvance(room, io);
   }

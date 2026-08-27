@@ -67,7 +67,7 @@ function startRound(room, io, wordPair) {
   room.state = "in-progress";
 
   const activeIds = getActivePlayerIds(room);
-  io.to(room.hostSocketId).emit("game:started", {
+  io.to(room.hostId).emit("game:started", {
     round: gs.round,
     playerCount: activeIds.length,
   });
@@ -129,7 +129,7 @@ function onVote(room, io, socketId, votedForId) {
   gs.phase = "voting";
   gs.votes.set(socketId, votedForId);
 
-  io.to(room.hostSocketId).emit("game:vote-progress", {
+  io.to(room.hostId).emit("game:vote-progress", {
     voted: gs.votes.size,
     total: activeIds.length,
   });
@@ -195,7 +195,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "round-results") return { error: "No round result to advance from." };
   gs.phase = "word-select";
-  io.to(room.hostSocketId).emit("game:word-select-ready", {});
+  io.to(room.hostId).emit("game:word-select-ready", {});
   return {};
 }
 
