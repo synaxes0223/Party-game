@@ -51,7 +51,7 @@ function showScreen(name) {
 }
 
 socket.on("connect", () => {
-  myId = socket.id;
+  myId = window.sessionToken;
 });
 
 // ---- Join flow ----
