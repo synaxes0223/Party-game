@@ -24,23 +24,30 @@ function assertTrue(condition, message) {
   if (!condition) throw new Error(`Assertion failed: ${message}`);
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-avalon-token-${tokenCounter++}`;
+}
+
 async function createRoom() {
   const host = await connect();
-  host.emit("host:create-room");
+  const hostToken = nextToken();
+  host.emit("host:create-room", { token: hostToken });
   const { room } = await once(host, "host:room-created");
-  return { host, roomCode: room.code };
+  return { host, hostToken, roomCode: room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
-    socket.emit("player:join-room", { code: roomCode, nickname: name });
+    const token = nextToken();
+    socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     await Promise.race([
       once(socket, "player:joined"),
       once(socket, "player:join-error").then((e) => Promise.reject(new Error(e.error))),
     ]);
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -81,12 +88,12 @@ function pickTeamWithEvil(players, teamSize) {
   // fail vote must deliberately include at least one Evil player.
   const evilPlayers = players.filter((p) => isEvil(p.role.role));
   const goodPlayers = players.filter((p) => !isEvil(p.role.role));
-  return [...evilPlayers, ...goodPlayers].slice(0, teamSize).map((p) => p.socket.id);
+  return [...evilPlayers, ...goodPlayers].slice(0, teamSize).map((p) => p.token);
 }
 
 async function proposeAndApproveTeam(host, roomCode, players, state, teamSize, teamIdsOverride) {
-  const leader = players.find((p) => p.socket.id === state.leaderId);
-  const teamIds = teamIdsOverride || players.slice(0, teamSize).map((p) => p.socket.id);
+  const leader = players.find((p) => p.token === state.leaderId);
+  const teamIds = teamIdsOverride || players.slice(0, teamSize).map((p) => p.token);
 
   const voteResultPromise = once(host, "game:avalon-team-vote-result");
   const nextStatePromise = once(host, "game:avalon-state");
@@ -105,7 +112,7 @@ async function runQuest(host, roomCode, players, teamIds, allSuccess) {
   const questResultPromise = once(host, "game:avalon-quest-result");
   const nextStatePromise = once(host, "game:avalon-state");
   teamIds.forEach((id) => {
-    const player = players.find((p) => p.socket.id === id);
+    const player = players.find((p) => p.token === id);
     const success = allSuccess || !isEvil(player.role.role);
     player.socket.emit("player:avalon-quest-vote", { code: roomCode, success });
   });
@@ -135,11 +142,11 @@ async function scenarioGoodWinsAssassinWrong() {
   }
 
   assertTrue(state.phase === "assassin", "3 successes should move to the assassin phase");
-  const assassin = players.find((p) => p.socket.id === state.assassinId);
-  const nonMerlin = players.find((p) => p.role.role !== "merlin" && p.socket.id !== assassin.socket.id);
+  const assassin = players.find((p) => p.token === state.assassinId);
+  const nonMerlin = players.find((p) => p.role.role !== "merlin" && p.token !== assassin.token);
 
   const resultsPromises = [host, ...players.map((p) => p.socket)].map((s) => once(s, "game:avalon-results"));
-  assassin.socket.emit("player:avalon-assassin-guess", { code: roomCode, targetId: nonMerlin.socket.id });
+  assassin.socket.emit("player:avalon-assassin-guess", { code: roomCode, targetId: nonMerlin.token });
   const allResults = await Promise.all(resultsPromises);
   allResults.forEach(({ winner }) => assertTrue(winner === "good", "Good should win when the Assassin guesses wrong"));
 
@@ -184,8 +191,8 @@ async function scenarioEvilWinsFiveRejections() {
   let state = await beginQuests(host, roomCode);
 
   for (let i = 0; i < 5; i++) {
-    const leader = players.find((p) => p.socket.id === state.leaderId);
-    const teamIds = players.slice(0, state.teamSize).map((p) => p.socket.id);
+    const leader = players.find((p) => p.token === state.leaderId);
+    const teamIds = players.slice(0, state.teamSize).map((p) => p.token);
 
     // Wait for the team-vote-open state fully BEFORE registering the next
     // pair of listeners — registering both `.once()` calls up front would
@@ -230,11 +237,11 @@ async function scenarioEvilWinsAssassinCorrect() {
     }
   }
 
-  const assassin = players.find((p) => p.socket.id === state.assassinId);
+  const assassin = players.find((p) => p.token === state.assassinId);
   const merlin = findByRole(players, "merlin");
 
   const resultsPromises = [host, ...players.map((p) => p.socket)].map((s) => once(s, "game:avalon-results"));
-  assassin.socket.emit("player:avalon-assassin-guess", { code: roomCode, targetId: merlin.socket.id });
+  assassin.socket.emit("player:avalon-assassin-guess", { code: roomCode, targetId: merlin.token });
   const allResults = await Promise.all(resultsPromises);
   allResults.forEach(({ winner }) => assertTrue(winner === "evil", "Evil should win when the Assassin guesses Merlin correctly"));
 

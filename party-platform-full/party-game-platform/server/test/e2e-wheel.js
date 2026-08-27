@@ -24,25 +24,32 @@ function assertTrue(condition, message) {
   if (!condition) throw new Error(`Assertion failed: ${message}`);
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-wheel-token-${tokenCounter++}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const initialWheelPromise = once(host, "wheel:list-updated");
-  host.emit("host:create-room");
+  host.emit("host:create-room", { token: hostToken });
   const { room } = await once(host, "host:room-created");
   const initialWheel = await initialWheelPromise;
-  return { host, roomCode: room.code, initialWheel };
+  return { host, hostToken, roomCode: room.code, initialWheel };
 }
 
 async function joinPlayer(roomCode, name) {
   const socket = await connect();
+  const token = nextToken();
   const wheelPromise = once(socket, "wheel:list-updated");
-  socket.emit("player:join-room", { code: roomCode, nickname: name });
+  socket.emit("player:join-room", { code: roomCode, nickname: name, token });
   await Promise.race([
     once(socket, "player:joined"),
     once(socket, "player:join-error").then((e) => Promise.reject(new Error(e.error))),
   ]);
   const initialWheel = await wheelPromise;
-  return { name, socket, initialWheel };
+  return { name, socket, token, initialWheel };
 }
 
 async function scenarioWheel() {
