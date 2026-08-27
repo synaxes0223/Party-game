@@ -287,7 +287,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onProposeTeam) game.onProposeTeam(room, io, socket.id, teamPlayerIds);
+    if (game.onProposeTeam) game.onProposeTeam(room, io, socket.data.token, teamPlayerIds);
   });
 
   // ---- PLAYER: vote to approve/reject the proposed team ----
@@ -295,7 +295,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onTeamVote) game.onTeamVote(room, io, socket.id, approve);
+    if (game.onTeamVote) game.onTeamVote(room, io, socket.data.token, approve);
   });
 
   // ---- PLAYER: submit a secret quest pass/fail vote ----
@@ -303,7 +303,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onQuestVote) game.onQuestVote(room, io, socket.id, success);
+    if (game.onQuestVote) game.onQuestVote(room, io, socket.data.token, success);
   });
 
   // ---- PLAYER: Assassin's final guess at Merlin's identity ----
@@ -311,7 +311,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onAssassinGuess) game.onAssassinGuess(room, io, socket.id, targetId);
+    if (game.onAssassinGuess) game.onAssassinGuess(room, io, socket.data.token, targetId);
   });
 
   // ---- PLAYER: confirms audio preloaded ----
@@ -319,7 +319,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onPlayerReady) game.onPlayerReady(room, io, socket.id);
+    if (game.onPlayerReady) game.onPlayerReady(room, io, socket.data.token);
   });
 
   // ---- PLAYER: casts vote ----
@@ -327,7 +327,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onVote) game.onVote(room, io, socket.id, votedForId);
+    if (game.onVote) game.onVote(room, io, socket.data.token, votedForId);
   });
 
   // ---- HOST: return to lobby / play again ----
@@ -359,7 +359,7 @@ io.on("connection", (socket) => {
     if (socket.data.token === room.hostId) {
       addedBy = "host";
     } else {
-      const player = room.players.get(socket.id);
+      const player = room.players.get(socket.data.token);
       if (player) nickname = player.nickname;
     }
 
