@@ -191,6 +191,26 @@ function attach(io, socket, ctx) {
     });
   }
 
+  // Fires whenever it's a specific seat's turn to vote on the current
+  // nomination, targeting just that player's phone with the minimal
+  // context needed to decide (who's nominated) -- matching Task 1's
+  // night-choice prompt's same "lights up one phone" design.
+  // nomination.currentVoterIndex is voting.js's own single source of truth
+  // for whose turn it is; this only reads it, never advances it.
+  function maybePromptVoteTurn(room, io) {
+    const nomination = room.gameState.day && room.gameState.day.currentNomination;
+    if (!nomination) return;
+    const voterSeatId = nomination.order[nomination.currentVoterIndex];
+    if (voterSeatId === undefined) return; // every seat in this nomination has already voted
+    const voterSeat = stateModule.findSeatById(room.gameState, voterSeatId);
+    if (!voterSeat) return;
+    const nomineeSeat = stateModule.findSeatById(room.gameState, nomination.nomineeSeatId);
+    io.to(voterSeat.playerToken).emit("game:botc-your-turn-to-vote", {
+      nomineeSeatId: nomination.nomineeSeatId,
+      nomineeNickname: nomineeSeat ? nomineeSeat.nickname : null,
+    });
+  }
+
   socket.on("host:botc-night-choice", ({ code, choice }) => {
     withHostRoom(code, (room) => {
       nightLoop.submitChoice(room.gameState, choice);
@@ -237,6 +257,7 @@ function attach(io, socket, ctx) {
     withHostRoom(code, (room) => {
       if (room.gameState.phase !== "day-discussion" || !room.gameState.day) return;
       voting.startNomination(room.gameState, nominatorSeatId, nomineeSeatId);
+      maybePromptVoteTurn(room, io);
       emitState(room, io);
     });
   });
@@ -245,6 +266,7 @@ function attach(io, socket, ctx) {
     withHostRoom(code, (room) => {
       if (!room.gameState.day || !room.gameState.day.currentNomination) return;
       voting.castVote(room.gameState, seatId, voted);
+      maybePromptVoteTurn(room, io);
       emitState(room, io);
     });
   });
