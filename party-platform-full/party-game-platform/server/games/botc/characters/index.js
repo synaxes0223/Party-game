@@ -41,4 +41,20 @@ function getModule(characterId) {
   return modulesById[characterId] || null;
 }
 
-module.exports = { TEAM_OF, ALL_CHARACTER_IDS, teamOf, charactersOfTeam, getModule };
+// getModuleForStep resolves either a character id or a pseudo-step id to its
+// module -- nightLoop.js only needs one lookup function for both.
+let stepModulesById = null;
+function getModuleForStep(stepId) {
+  if (stepId === "minion-info" || stepId === "demon-info") {
+    if (!stepModulesById) {
+      stepModulesById = {
+        "minion-info": require("../steps/minionInfo"),
+        "demon-info": require("../steps/demonInfo"),
+      };
+    }
+    return stepModulesById[stepId] || null;
+  }
+  return getModule(stepId);
+}
+
+module.exports = { TEAM_OF, ALL_CHARACTER_IDS, teamOf, charactersOfTeam, getModule, getModuleForStep };
