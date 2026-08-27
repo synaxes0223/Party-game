@@ -12,7 +12,8 @@
     "test:e2e-word-wolf": "node test/e2e-word-wolf.js",
     "test:e2e-slipup": "node test/e2e-slip-up.js",
     "test:e2e-wheel": "node test/e2e-wheel.js",
-    "test:e2e-avalon": "node test/e2e-avalon.js"
+    "test:e2e-avalon": "node test/e2e-avalon.js",
+    "test:e2e-reconnect": "node test/e2e-reconnect.js"
   },
   "dependencies": {
     "express": "^4.19.2",

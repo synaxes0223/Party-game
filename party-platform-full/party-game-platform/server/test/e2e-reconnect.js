@@ -1,0 +1,101 @@
+// e2e-reconnect.js
+// Proves the durable-session guarantee: a player who drops mid-game and comes
+// back with the same token gets the same seat, and a host who drops does not
+// destroy the room.
+
+const { spawn } = require("child_process");
+const { io: connect } = require("socket.io-client");
+
+const PORT = 3210;
+const URL = `http://127.0.0.1:${PORT}`;
+const HOST_TOKEN = "e2e-host-token-0001";
+const P1 = "e2e-player-token-001";
+const P2 = "e2e-player-token-002";
+const P3 = "e2e-player-token-003";
+
+function once(socket, event) {
+  return new Promise((resolve) => socket.once(event, resolve));
+}
+
+async function main() {
+  const server = spawn(process.execPath, ["index.js"], {
+    env: { ...process.env, PORT: String(PORT) },
+  });
+  await new Promise((resolve) => {
+    server.stdout.on("data", (d) => {
+      if (d.toString().includes("Server running on port")) resolve();
+    });
+  });
+
+  const host = connect(URL);
+  await once(host, "connect");
+  host.emit("host:create-room", { token: HOST_TOKEN });
+  const { room } = await once(host, "host:room-created");
+  const code = room.code;
+
+  const players = [];
+  for (const token of [P1, P2, P3]) {
+    const s = connect(URL);
+    await once(s, "connect");
+    s.emit("player:join-room", { code, nickname: `P-${token.slice(-1)}`, token });
+    await once(s, "player:joined");
+    players.push({ socket: s, token });
+  }
+
+  // Put the room into a running game so seats become load-bearing.
+  const startedPromise = once(host, "game:started");
+  host.emit("host:select-game", { code, gameId: "word-wolf" });
+  host.emit("host:select-auto-pair", { code });
+  await startedPromise;
+
+  // --- a player drops and returns ---
+  players[0].socket.disconnect();
+  await new Promise((r) => setTimeout(r, 200));
+
+  const returning = connect(URL);
+  await once(returning, "connect");
+  returning.emit("player:join-room", { code, nickname: "ignored-on-rejoin", token: P1 });
+  const rejoin = await once(returning, "player:rejoined");
+
+  const seat = rejoin.room.players.find((p) => p.id === P1);
+  if (!seat) throw new Error("FAIL: the reclaimed seat is missing from the room");
+  if (seat.nickname !== "P-1") throw new Error("FAIL: rejoin overwrote the nickname");
+  if (rejoin.room.players.length !== 3) {
+    throw new Error(`FAIL: expected 3 seats, saw ${rejoin.room.players.length}`);
+  }
+  console.log("  PASS — a mid-game disconnect keeps the seat and the same token reclaims it");
+
+  // --- a stranger still cannot walk in ---
+  const stranger = connect(URL);
+  await once(stranger, "connect");
+  stranger.emit("player:join-room", { code, nickname: "Gatecrasher", token: "e2e-stranger-0001" });
+  const refused = await once(stranger, "player:join-error");
+  if (refused.error !== "Game already in progress") {
+    throw new Error(`FAIL: expected the in-progress gate, saw "${refused.error}"`);
+  }
+  console.log("  PASS — an unknown token is still refused mid-game");
+
+  // --- the host drops and reclaims ---
+  host.disconnect();
+  await new Promise((r) => setTimeout(r, 200));
+
+  const host2 = connect(URL);
+  await once(host2, "connect");
+  host2.emit("host:reclaim-room", { code, token: HOST_TOKEN });
+  const reclaimed = await once(host2, "host:room-reclaimed");
+  if (reclaimed.room.code !== code) throw new Error("FAIL: host could not reclaim the room");
+  if (reclaimed.room.players.length !== 3) {
+    throw new Error("FAIL: reclaiming the room lost players");
+  }
+  console.log("  PASS — a host disconnect does not destroy the room");
+
+  [returning, stranger, host2, players[1].socket, players[2].socket].forEach((s) => s.disconnect());
+  server.kill();
+  console.log("\nALL RECONNECT E2E SCENARIOS PASSED");
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error(err.message || err);
+  process.exit(1);
+});
