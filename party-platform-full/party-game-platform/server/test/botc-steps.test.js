@@ -55,6 +55,28 @@ test("demon-info reveals the sole Minion plus exactly three not-in-play good blu
   assert.equal(new Set(candidates[0].payload.bluffs).size, 3);
 });
 
+test("demon-info degrades safely to fewer than 3 bluffs when all implemented good characters are dealt", () => {
+  // Standard 6-player distribution: 3 townsfolk + 1 outsider + 1 minion + 1 demon.
+  // This vertical slice implements exactly those 4 good characters (washerwoman,
+  // empath, soldier, butler), so dealing all of them leaves zero left over for
+  // bluffs -- an accepted limitation, not a bug. This proves the shortfall is
+  // handled safely (no throw, no wraparound to dealt/duplicate ids) rather than
+  // just asserting it exists.
+  const s = dealtState([
+    { nickname: "Alice", characterId: "washerwoman" },
+    { nickname: "Bob", characterId: "empath" },
+    { nickname: "Carol", characterId: "soldier" },
+    { nickname: "Dave", characterId: "butler" },
+    { nickname: "Erin", characterId: "poisoner" },
+    { nickname: "Frank", characterId: "imp" },
+  ]);
+  const candidates = demonInfo.computeCandidates(s, s.seats[5]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].payload.minion.characterId, "poisoner");
+  assert.ok(candidates[0].payload.bluffs.length < 3);
+  assert.equal(candidates[0].payload.bluffs.length, 0);
+});
+
 test("renderForPlayer for demon-info names the minion and lists the bluffs", () => {
   const payload = { minion: { seatId: 2, nickname: "Bob", characterId: "poisoner" }, bluffs: ["empath", "soldier", "butler"] };
   const text = demonInfo.renderForPlayer(payload);
