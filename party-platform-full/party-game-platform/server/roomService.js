@@ -112,10 +112,6 @@ function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000) {
   return deleted;
 }
 
-function deleteRoom(code) {
-  rooms.delete((code || "").toUpperCase());
-}
-
 function findRoomByHost(hostId) {
   for (const room of rooms.values()) {
     if (room.hostId === hostId) return room;
@@ -161,7 +157,6 @@ module.exports = {
   joinRoom,
   markPlayerDisconnected,
   sweepAbandonedRooms,
-  deleteRoom,
   findRoomByHost,
   publicRoomView,
   markHostDisconnected,

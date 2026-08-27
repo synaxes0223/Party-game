@@ -52,7 +52,7 @@ nothing needs internet.
    (Settings → Apps → Termux → Battery → Unrestricted). Without this Android
    will suspend the server a few minutes after you switch away from Termux.
 
-   This is **required**, not optional. Game state lives only in the server
+   Game state lives only in the server
    process's memory — there is no save file. Players and the host can now drop
    their connections and reclaim their seats, but if Android kills the Node
    process itself, the game is gone.

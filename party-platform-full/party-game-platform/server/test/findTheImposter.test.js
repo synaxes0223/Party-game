@@ -15,7 +15,7 @@ function makeRoom(nicknames) {
   nicknames.forEach((name, i) => players.set(`p${i + 1}`, { id: `p${i + 1}`, nickname: name, ready: false }));
   return {
     code: "TEST",
-    hostSocketId: "host1",
+    hostId: "host1",
     state: "lobby",
     players,
     gameId: "find-the-imposter",
