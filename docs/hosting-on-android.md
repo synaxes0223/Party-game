@@ -47,10 +47,15 @@ nothing needs internet.
    Open `http://localhost:3000/host/` in the phone's browser. Stop the server
    with `Ctrl-C` when you are done.
 
-5. Optional but recommended — install the Termux:API companion app so
+5. **Required** — install the Termux:API companion app so
    `termux-wake-lock` works, and turn off battery optimisation for Termux
    (Settings → Apps → Termux → Battery → Unrestricted). Without this Android
    will suspend the server a few minutes after you switch away from Termux.
+
+   This is **required**, not optional. Game state lives only in the server
+   process's memory — there is no save file. Players and the host can now drop
+   their connections and reclaim their seats, but if Android kills the Node
+   process itself, the game is gone.
 
 ## At the party
 
@@ -97,6 +102,8 @@ nothing needs internet.
 | Server dies after a few minutes | Wake lock or battery optimisation. Run `termux-wake-lock` and set Termux to Unrestricted battery use. |
 | `npm start` fails with `EADDRINUSE` | A previous run is still alive. `pkill node`, then start again. |
 | Want a different port | `PORT=8080 npm start`. The banner and the QR code follow the change automatically. |
+| A player's phone slept and they came back to a blank page | Expected — reloading `/player/` rejoins them to their seat automatically, as long as they use the same browser (the session token lives in that browser's storage). A different browser or a cleared cache is a new player. |
+| The host tab reloaded and the game vanished | The room survives a host reload; the host lands back in the lobby, not the mid-game screen. Re-enter the game from there. If the server process itself restarted, the game is lost. |
 
 ## Why not a real Android app
 
