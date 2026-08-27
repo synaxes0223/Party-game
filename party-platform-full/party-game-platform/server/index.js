@@ -15,6 +15,7 @@ const gameRegistry = require("./games/registry");
 const uploadStore = require("./games/uploadStore");
 const wheelLogic = require("./games/wheelLogic");
 const lanInfo = require("./lanInfo");
+const { isValidToken } = require("./sessionToken");
 
 const app = express();
 const server = http.createServer(app);
@@ -95,7 +96,7 @@ function printLanUrl() {
 // off to `handler`.
 function withHostGame(socket, code, handler) {
   const room = roomService.getRoom(code);
-  if (!room || room.hostSocketId !== socket.id) return;
+  if (!room || room.hostId !== socket.data.token) return;
   const game = gameRegistry.getGame(room.gameId);
   if (!game) return;
   const result = handler(room, game);
@@ -103,9 +104,23 @@ function withHostGame(socket, code, handler) {
 }
 
 io.on("connection", (socket) => {
+  // Identity is the client's persistent token, not socket.id. Joining a room
+  // named after it means every existing io.to(playerId) emit keeps working
+  // across reconnects without the game modules changing.
+  function bindIdentity(token) {
+    if (!isValidToken(token)) return false;
+    socket.data.token = token;
+    socket.join(token);
+    return true;
+  }
+
   // ---- HOST: create room ----
-  socket.on("host:create-room", () => {
-    const room = roomService.createRoom(socket.id);
+  socket.on("host:create-room", ({ token } = {}) => {
+    if (!bindIdentity(token)) {
+      socket.emit("host:error", { error: "Missing or malformed session token" });
+      return;
+    }
+    const room = roomService.createRoom(token);
     socket.join(room.code);
     socket.emit("host:room-created", {
       room: roomService.publicRoomView(room),
@@ -114,18 +129,49 @@ io.on("connection", (socket) => {
     socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
   });
 
+  // ---- HOST: reclaim a room after reconnecting ----
+  socket.on("host:reclaim-room", ({ code, token } = {}) => {
+    if (!bindIdentity(token)) return;
+    const room = roomService.reclaimHost(code, token);
+    if (!room) {
+      socket.emit("host:reclaim-failed", { code });
+      return;
+    }
+    socket.join(room.code);
+    socket.emit("host:room-reclaimed", {
+      room: roomService.publicRoomView(room),
+      games: gameRegistry.listGames(),
+      gameId: room.gameId,
+    });
+    io.in(room.code).emit("room:host-reconnected", {});
+  });
+
   // ---- PLAYER: join room ----
-  socket.on("player:join-room", ({ code, nickname }) => {
-    const result = roomService.joinRoom(code, socket.id, nickname);
+  socket.on("player:join-room", ({ code, nickname, token } = {}) => {
+    if (!bindIdentity(token)) {
+      socket.emit("player:join-error", { error: "Missing or malformed session token" });
+      return;
+    }
+    const result = roomService.joinRoom(code, token, nickname);
     if (result.error) {
       socket.emit("player:join-error", { error: result.error });
       return;
     }
     const room = result.room;
     socket.join(room.code);
-    socket.emit("player:joined", { room: roomService.publicRoomView(room) });
+    socket.emit(result.rejoined ? "player:rejoined" : "player:joined", {
+      room: roomService.publicRoomView(room),
+    });
     socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
-    io.to(room.hostSocketId).emit("host:room-updated", {
+
+    // A returning player has lost every private message the game sent them,
+    // so let the game module re-send whatever that player is entitled to see.
+    if (result.rejoined && room.gameId && room.gameState) {
+      const game = gameRegistry.getGame(room.gameId);
+      if (game && game.onPlayerRejoined) game.onPlayerRejoined(room, io, token);
+    }
+
+    io.to(room.hostId).emit("host:room-updated", {
       room: roomService.publicRoomView(room),
     });
     io.in(room.code).emit("room:player-list", {
@@ -136,7 +182,7 @@ io.on("connection", (socket) => {
   // ---- HOST: select a game ----
   socket.on("host:select-game", ({ code, gameId }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     const game = gameRegistry.getGame(gameId);
     if (!game) return;
 
@@ -287,7 +333,7 @@ io.on("connection", (socket) => {
   // ---- HOST: return to lobby / play again ----
   socket.on("host:reset-room", ({ code }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     room.state = "lobby";
     room.gameId = null;
     room.gameState = null;
@@ -310,7 +356,7 @@ io.on("connection", (socket) => {
 
     let addedBy = "player";
     let nickname;
-    if (socket.id === room.hostSocketId) {
+    if (socket.data.token === room.hostId) {
       addedBy = "host";
     } else {
       const player = room.players.get(socket.id);
@@ -329,7 +375,7 @@ io.on("connection", (socket) => {
   // ---- WHEEL: remove a punishment (host only) ----
   socket.on("wheel:remove-punishment", ({ code, id }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
 
     const result = wheelLogic.removeItem(room.punishmentWheel.items, id);
     room.punishmentWheel.items = result.items;
@@ -338,27 +384,37 @@ io.on("connection", (socket) => {
 
   // ---- Disconnect handling ----
   socket.on("disconnect", () => {
-    const room = roomService.removePlayer(socket.id);
-    if (room) {
-      if (room.gameId && room.gameState) {
+    const token = socket.data.token;
+    if (!token) return;
+
+    const result = roomService.markPlayerDisconnected(token);
+    if (result) {
+      const { room, removed } = result;
+      // Only tell the game someone left if the seat is actually gone. A
+      // mid-game drop keeps the seat, and telling the game otherwise is what
+      // used to destroy the position.
+      if (removed && room.gameId && room.gameState) {
         const game = gameRegistry.getGame(room.gameId);
-        if (game.onPlayerLeft) game.onPlayerLeft(room, io, socket.id);
+        if (game && game.onPlayerLeft) game.onPlayerLeft(room, io, token);
       }
-      io.to(room.hostSocketId).emit("host:room-updated", {
+      io.to(room.hostId).emit("host:room-updated", {
         room: roomService.publicRoomView(room),
       });
       io.in(room.code).emit("room:player-list", {
         players: roomService.publicRoomView(room).players,
       });
-      roomService.removeRoomIfEmpty(room.code);
     }
 
-    const hostedRoom = roomService.findRoomByHost(socket.id);
+    const hostedRoom = roomService.markHostDisconnected(token);
     if (hostedRoom) {
-      io.in(hostedRoom.code).emit("room:host-disconnected");
-      roomService.deleteRoom(hostedRoom.code);
+      io.in(hostedRoom.code).emit("room:host-disconnected", {});
     }
   });
 });
+
+// Rooms are no longer emptied by disconnects, so reclaim abandoned ones on a
+// timer. Unref so the interval never keeps the process alive on its own.
+const ROOM_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => roomService.sweepAbandonedRooms(), ROOM_SWEEP_INTERVAL_MS).unref();
 
 server.listen(PORT, "0.0.0.0", printLanUrl);
