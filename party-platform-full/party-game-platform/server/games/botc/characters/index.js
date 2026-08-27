@@ -32,6 +32,8 @@ function getModule(characterId) {
       washerwoman: require("./washerwoman"),
       empath: require("./empath"),
       soldier: require("./soldier"),
+      poisoner: require("./poisoner"),
+      butler: require("./butler"),
     };
   }
   return modulesById[characterId] || null;
