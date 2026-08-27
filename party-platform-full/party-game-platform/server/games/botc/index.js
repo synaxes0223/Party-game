@@ -271,6 +271,25 @@ function attach(io, socket, ctx) {
     });
   });
 
+  // The player-driven counterpart to host:botc-vote. Re-derives whose turn
+  // it is directly from state.day.currentNomination -- the one source of
+  // truth voting.js itself uses -- rather than trusting the client's claim
+  // about which seat they are, so a stale or spoofed request from the wrong
+  // player is silently ignored exactly like an out-of-turn host:botc-vote
+  // targeting the wrong seatId would be.
+  socket.on("player:botc-vote", ({ code, voted }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameState || room.gameId !== meta.id) return;
+    if (!room.gameState.day || !room.gameState.day.currentNomination) return;
+    const nomination = room.gameState.day.currentNomination;
+    const currentSeatId = nomination.order[nomination.currentVoterIndex];
+    const seat = stateModule.findSeatByToken(room.gameState, socket.data.token);
+    if (!seat || seat.seatId !== currentSeatId) return;
+    voting.castVote(room.gameState, seat.seatId, voted);
+    maybePromptVoteTurn(room, io);
+    emitState(room, io);
+  });
+
   socket.on("host:botc-resolve-vote", ({ code }) => {
     withHostRoom(code, (room) => {
       if (!room.gameState.day || !room.gameState.day.currentNomination) return;
