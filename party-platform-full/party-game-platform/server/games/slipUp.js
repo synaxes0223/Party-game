@@ -25,6 +25,12 @@ function getActivePlayerIds(room) {
   return Array.from(room.players.keys());
 }
 
+function buildResults(room, gs) {
+  return Array.from(room.players.values())
+    .map((p) => ({ id: p.id, nickname: p.nickname, catchCount: gs.catchCounts.get(p.id) || 0 }))
+    .sort((a, b) => a.catchCount - b.catchCount);
+}
+
 function broadcastYourView(room, io) {
   const gs = room.gameState;
   const players = Array.from(room.players.values());
@@ -114,12 +120,7 @@ function onEndGame(room, io) {
   const gs = room.gameState;
   if (!gs) return { error: "Game has not started." };
   gs.phase = "ended";
-
-  const results = Array.from(room.players.values())
-    .map((p) => ({ id: p.id, nickname: p.nickname, catchCount: gs.catchCounts.get(p.id) || 0 }))
-    .sort((a, b) => a.catchCount - b.catchCount);
-
-  io.in(room.code).emit("game:final-results", { results });
+  io.in(room.code).emit("game:final-results", { results: buildResults(room, gs) });
   return {};
 }
 
@@ -136,7 +137,12 @@ function onPlayerLeft(room, io, socketId) {
 // A reconnecting player lost their private view of everyone else's entry.
 function onPlayerRejoined(room, io, playerId) {
   const gs = room.gameState;
-  if (!gs || gs.phase !== "active") return;
+  if (!gs) return;
+  if (gs.phase === "ended") {
+    io.to(playerId).emit("game:final-results", { results: buildResults(room, gs) });
+    return;
+  }
+  if (gs.phase !== "active") return;
   if (!room.players.has(playerId)) return;
   const players = Array.from(room.players.values());
   const others = players

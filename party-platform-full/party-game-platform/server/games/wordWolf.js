@@ -240,7 +240,12 @@ function onPlayerLeft(room, io, socketId) {
 // that, nothing was sent yet, and the normal reveal broadcast will cover them.
 function onPlayerRejoined(room, io, playerId) {
   const gs = room.gameState;
-  if (!gs || gs.phase === "loading") return;
+  if (!gs) return;
+  if (gs.phase === "game-over") {
+    revealFinalResults(room, io, gs.winner);
+    return;
+  }
+  if (gs.phase !== "revealed" && gs.phase !== "voting") return;
   io.to(playerId).emit("game:reveal-word", { gameId: meta.id, word: getWordForPlayer(gs, playerId) });
 }
 

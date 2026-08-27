@@ -343,6 +343,11 @@ function onPlayerLeft(room, io, socketId) {
 function onPlayerRejoined(room, io, playerId) {
   const gs = room.gameState;
   if (!gs) return;
+  if (gs.phase === "game-over") {
+    revealFinalResults(room, io, gs.winner);
+    return;
+  }
+  if (gs.phase === "round-results" || gs.phase === "track-select") return;
   const track = getTrackForPlayer(gs, playerId);
   if (!track) return;
   io.to(playerId).emit("game:load-audio", { gameId: meta.id, ...track });

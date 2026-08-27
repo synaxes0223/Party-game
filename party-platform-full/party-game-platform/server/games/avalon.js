@@ -411,7 +411,11 @@ function onPlayerLeft(room, io, socketId) {
 // persisting the transient Map that onStartGame only used once.
 function onPlayerRejoined(room, io, playerId) {
   const gs = room.gameState;
-  if (!gs || gs.phase === "game-over") return;
+  if (!gs) return;
+  if (gs.phase === "game-over") {
+    broadcastResults(room, io);
+    return;
+  }
   const knowledge = computeKnowledge(gs.roles, gs.nicknames);
   const k = knowledge.get(playerId);
   if (k) {
