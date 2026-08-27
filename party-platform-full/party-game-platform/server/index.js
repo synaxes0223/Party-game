@@ -382,6 +382,9 @@ io.on("connection", (socket) => {
     io.in(room.code).emit("wheel:list-updated", { items: room.punishmentWheel.items });
   });
 
+  // ---- Blood on the Clocktower: self-contained socket wiring ----
+  gameRegistry.getGame("botc").attach(io, socket, { roomService });
+
   // ---- Disconnect handling ----
   socket.on("disconnect", () => {
     const token = socket.data.token;

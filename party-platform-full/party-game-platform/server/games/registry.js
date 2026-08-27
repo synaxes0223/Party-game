@@ -8,12 +8,14 @@ const findTheImposter = require("./findTheImposter");
 const wordWolf = require("./wordWolf");
 const slipUp = require("./slipUp");
 const avalon = require("./avalon");
+const botc = require("./botc");
 
 const GAMES = {
   [findTheImposter.meta.id]: findTheImposter,
   [wordWolf.meta.id]: wordWolf,
   [slipUp.meta.id]: slipUp,
   [avalon.meta.id]: avalon,
+  [botc.meta.id]: botc,
 };
 
 function listGames() {
