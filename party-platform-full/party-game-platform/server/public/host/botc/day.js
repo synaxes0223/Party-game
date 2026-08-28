@@ -88,6 +88,14 @@ function renderVoteTally() {
   }
 }
 
+function renderVoteControls() {
+  const state = store.latestState;
+  const input = document.getElementById("botc-vote-timer-input");
+  if (state && state.day && document.activeElement !== input) {
+    input.value = Math.round((state.day.voteTimerMs || 0) / 1000);
+  }
+}
+
 function renderVirginPrompt() {
   const state = store.latestState;
   const box = document.getElementById("botc-virgin-prompt");
@@ -182,9 +190,18 @@ function renderEndedBanner() {
 export function initDayPanel() {
   onStateChange(() => {
     renderDayPanel();
+    renderVoteControls();
     renderVirginPrompt();
     renderSlayerRow();
     renderEndedBanner();
+  });
+
+  document.getElementById("btn-botc-set-vote-timer").addEventListener("click", () => {
+    const secs = Number(document.getElementById("botc-vote-timer-input").value) || 0;
+    store.socket.emit("host:botc-set-vote-timer", { code: store.roomCode, ms: secs * 1000 });
+  });
+  document.getElementById("btn-botc-skip-voter").addEventListener("click", () => {
+    store.socket.emit("host:botc-skip-voter", { code: store.roomCode });
   });
 
   document.getElementById("btn-botc-nominate").addEventListener("click", () => {

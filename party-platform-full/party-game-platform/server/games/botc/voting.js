@@ -17,6 +17,7 @@ function startDay(state) {
     onBlock: null,
     pendingVirgin: null,
     pendingSlayer: null,
+    voteTimerMs: 15000,
   };
 }
 

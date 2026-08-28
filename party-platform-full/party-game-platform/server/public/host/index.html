@@ -539,6 +539,13 @@
           <button type="button" id="btn-botc-slayer-nothing" class="btn-secondary">Nothing happens</button>
         </div>
         <div id="botc-vote-tally" class="botc-vote-tally"></div>
+        <div class="botc-vote-controls">
+          <label>Vote timer (s):
+            <input type="number" id="botc-vote-timer-input" min="0" step="1" class="input-field" />
+          </label>
+          <button type="button" id="btn-botc-set-vote-timer" class="btn-secondary">Set</button>
+          <button type="button" id="btn-botc-skip-voter" class="btn-secondary">Skip current voter</button>
+        </div>
         <div id="botc-onblock" class="botc-onblock"></div>
         <button type="button" id="btn-botc-execute" class="btn-primary" hidden>Execute</button>
       </div>

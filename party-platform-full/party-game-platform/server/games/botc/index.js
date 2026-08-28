@@ -92,6 +92,7 @@ function publicStateView(state) {
           nominationsReceived: state.day.nominationsReceived,
           currentNomination: publicNomination(state.day.currentNomination),
           onBlock: state.day.onBlock,
+          voteTimerMs: state.day.voteTimerMs,
           pendingVirgin: state.day.pendingVirgin
             ? {
                 ...state.day.pendingVirgin,
@@ -169,17 +170,47 @@ function maybePromptNightChoice(room, io) {
 // nomination.currentVoterIndex is voting.js's own single source of truth
 // for whose turn it is; this only reads it, never advances it.
 function maybePromptVoteTurn(room, io) {
-  const nomination = room.gameState.day && room.gameState.day.currentNomination;
+  clearVoteTimer(room);
+  const st = room.gameState;
+  const nomination = st.day && st.day.currentNomination;
   if (!nomination) return;
   const voterSeatId = nomination.order[nomination.currentVoterIndex];
   if (voterSeatId === undefined) return; // every seat in this nomination has already voted
-  const voterSeat = stateModule.findSeatById(room.gameState, voterSeatId);
+  const voterSeat = stateModule.findSeatById(st, voterSeatId);
   if (!voterSeat) return;
-  const nomineeSeat = stateModule.findSeatById(room.gameState, nomination.nomineeSeatId);
+  const nomineeSeat = stateModule.findSeatById(st, nomination.nomineeSeatId);
   io.to(voterSeat.playerToken).emit("game:botc-your-turn-to-vote", {
     nomineeSeatId: nomination.nomineeSeatId,
     nomineeNickname: nomineeSeat ? nomineeSeat.nickname : null,
   });
+
+  const ms = st.day.voteTimerMs;
+  if (ms > 0) {
+    room.botcVoteTimer = setTimeout(() => {
+      room.botcVoteTimer = null;
+      const cur = st.day && st.day.currentNomination;
+      if (!cur || cur.order[cur.currentVoterIndex] !== voterSeatId) return; // already voted
+      voting.castVote(st, voterSeatId, false);
+      maybePromptVoteTurn(room, io);
+      emitState(room, io);
+    }, ms);
+    room.botcVoteTimer.unref();
+  }
+}
+
+// Game-owned timeout cleanup, mirroring passTheBomb.js's fuseTimeout/onReset:
+// a locked phone that never votes would otherwise stall the sequence, so the
+// timer auto-passes the current voter. Cleared on reset so a stray callback
+// never fires against a room whose game is gone.
+function clearVoteTimer(room) {
+  if (room.botcVoteTimer) {
+    clearTimeout(room.botcVoteTimer);
+    room.botcVoteTimer = null;
+  }
+}
+
+function onReset(room) {
+  clearVoteTimer(room);
 }
 
 // Seat order is normally just room.players' Map insertion (join) order, but
@@ -520,6 +551,30 @@ function attach(io, socket, ctx) {
     withHostRoom(code, (room) => {
       if (!room.gameState.day || !room.gameState.day.currentNomination) return;
       voting.resolveNomination(room.gameState);
+      clearVoteTimer(room);
+      emitState(room, io);
+    });
+  });
+
+  // Storyteller adjusts the per-voter auto-pass timer (ms). 0 disables it.
+  socket.on("host:botc-set-vote-timer", ({ code, ms }) => {
+    withHostRoom(code, (room) => {
+      if (!room.gameState.day) return;
+      room.gameState.day.voteTimerMs = Math.max(0, Number(ms) || 0);
+      emitState(room, io);
+    });
+  });
+
+  // Storyteller records the current voter as a pass immediately (a locked
+  // phone the Storyteller doesn't want to wait out).
+  socket.on("host:botc-skip-voter", ({ code }) => {
+    withHostRoom(code, (room) => {
+      const nom = room.gameState.day && room.gameState.day.currentNomination;
+      if (!nom) return;
+      const voterSeatId = nom.order[nom.currentVoterIndex];
+      if (voterSeatId === undefined) return;
+      voting.castVote(room.gameState, voterSeatId, false);
+      maybePromptVoteTurn(room, io);
       emitState(room, io);
     });
   });
@@ -577,4 +632,4 @@ function onPlayerRejoined(room, io, playerId) {
   maybePromptVoteTurn(room, io);
 }
 
-module.exports = { meta, attach, onPlayerLeft, onPlayerRejoined };
+module.exports = { meta, attach, onPlayerLeft, onPlayerRejoined, onReset };
