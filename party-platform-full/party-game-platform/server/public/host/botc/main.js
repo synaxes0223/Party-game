@@ -7,6 +7,7 @@
 // calls window.__botcEnterSetup).
 import { store, setState } from "./store.js";
 import { initSetup } from "./setup.js";
+import { initGrimoire } from "./grimoire.js";
 
 const screens = {
   setup: document.getElementById("screen-botc-setup"),
@@ -65,3 +66,4 @@ store.socket.on("host:botc-error", ({ error }) => {
 });
 
 initSetup();
+initGrimoire();
