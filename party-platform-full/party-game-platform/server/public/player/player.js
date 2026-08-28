@@ -47,7 +47,7 @@ socket.on("room:game-selected", ({ gameId }) => {
 });
 
 function showScreen(name) {
-  Object.values(screens).forEach((s) => s.classList.remove("active"));
+  document.querySelectorAll(".screen.active").forEach((s) => s.classList.remove("active"));
   screens[name].classList.add("active");
 }
 
