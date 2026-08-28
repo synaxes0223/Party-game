@@ -7,9 +7,10 @@
 import { store } from "./store.js";
 import { showBotcScreen } from "./main.js";
 
-// The vertical slice's 7 implemented characters. Hint text is short,
-// original flavor per spec §1 ("written fresh and kept short") -- not
-// official Almanac prose.
+// Hint text is short, original flavor per spec §1 ("written fresh and kept
+// short") -- not official Almanac prose. A Drunk's phone receives its
+// BELIEVED character via game:botc-role, so the drunk entry here is only a
+// fallback.
 const CHARACTERS = {
   washerwoman: {
     label: "Washerwoman",
@@ -23,9 +24,37 @@ const CHARACTERS = {
     label: "Soldier",
     hint: "You are safe from the Demon's kill.",
   },
+  chef: {
+    label: "Chef",
+    hint: "You start knowing how many pairs of evil players sit next to each other.",
+  },
+  investigator: {
+    label: "Investigator",
+    hint: "You start knowing that 1 of 2 players is a particular Minion.",
+  },
+  librarian: {
+    label: "Librarian",
+    hint: "You start knowing that 1 of 2 players is a particular Outsider (or that none are in play).",
+  },
+  monk: {
+    label: "Monk",
+    hint: "Each night except the first, choose a player (not yourself): they are safe from the Demon tonight.",
+  },
+  fortuneTeller: {
+    label: "Fortune Teller",
+    hint: "Each night, choose 2 players: you learn if either registers as the Demon. One good player may register falsely to you.",
+  },
   butler: {
     label: "Butler",
     hint: "Each night, choose a player (not yourself). Tomorrow, you may only vote if they are voting too.",
+  },
+  drunk: {
+    label: "Drunk",
+    hint: "You think you are a Townsfolk, but you are the Drunk. Your ability does nothing and your information may be wrong.",
+  },
+  saint: {
+    label: "Saint",
+    hint: "If you are executed, your team loses.",
   },
   poisoner: {
     label: "Poisoner",

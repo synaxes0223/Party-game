@@ -282,7 +282,21 @@ function attach(io, socket, ctx) {
       if (!seat) return;
       const team = characters.teamOf(characterId);
       if (!team) return;
+      // The Drunk needs a believed Townsfolk it cannot supply here, and
+      // grimoire.setCharacter would force believedCharacterId to "drunk"
+      // (a seat that never wakes and never registers as impaired). Deal the
+      // Drunk from the setup screen's believed-character picker instead.
+      if (characterId === "drunk") {
+        socket.emit("host:botc-error", {
+          error: "Assign the Drunk from the setup screen (it needs a believed Townsfolk).",
+        });
+        return;
+      }
       grimoire.setCharacter(seat, characterId, dealing.alignmentForTeam(team));
+      // A mid-game override to the Fortune Teller needs a red herring; the
+      // idempotency guard in assignFortuneTellerRedHerring makes this safe
+      // to call even when one already exists.
+      if (characterId === "fortuneTeller") dealing.assignFortuneTellerRedHerring(room.gameState);
       emitState(room, io);
     });
   });
@@ -304,12 +318,17 @@ function attach(io, socket, ctx) {
   // Free-text reminder tokens -- every character's own applyChoice already
   // adds its own typed reminders (poisoned, etc.) automatically; this is
   // the Storyteller's manual escape hatch for anything the character
-  // modules don't cover (spec §6: "plus free-text custom tokens").
-  socket.on("host:botc-add-reminder", ({ code, seatId, label }) => {
+  // modules don't cover (spec §6: "plus free-text custom tokens"), plus the
+  // typed kinds the engine reads: re-placing a Fortune Teller red herring
+  // that was moved, or a Monk/Poisoner reminder the Storyteller wants to
+  // set by hand. Kind is whitelisted so a client cannot invent one.
+  socket.on("host:botc-add-reminder", ({ code, seatId, label, kind }) => {
     withHostRoom(code, (room) => {
       const seat = stateModule.findSeatById(room.gameState, seatId);
       if (!seat || !label) return;
-      grimoire.addReminder(room.gameState, seat, "custom", null, label);
+      const KINDS = new Set(["custom", "red-herring", "protected", "poisoned"]);
+      const k = KINDS.has(kind) ? kind : "custom";
+      grimoire.addReminder(room.gameState, seat, k, null, label);
       emitState(room, io);
     });
   });

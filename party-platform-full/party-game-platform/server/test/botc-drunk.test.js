@@ -40,18 +40,14 @@ test("dealManual rejects a drunk assignment with no believedCharacterId", () => 
 
 test("dealRandom gives a dealt Drunk a believed Townsfolk that is not in play", () => {
   const s = state.createInitialState();
-  s.seats = [1, 2, 3, 4, 5].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
-  // force the Outsider slot to be the Drunk by making it the only outsider available:
-  // 5-player distribution is 3 townsfolk / 0 outsiders / 1 minion / 1 demon, so use 6 seats instead.
-  s.seats.push(state.createSeat(6, "t6", "P6"));
-  const res = dealing.dealRandom(s, { townsfolk: 3, outsiders: 1, minions: 1, demon: 1 });
+  s.seats = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  // Deal all three outsiders (Butler, Drunk, Saint), so the Drunk is ALWAYS dealt.
+  const res = dealing.dealRandom(s, { townsfolk: 3, outsiders: 3, minions: 1, demon: 1 });
   assert.equal(res.error, undefined);
   const drunkSeat = s.seats.find((seat) => seat.characterId === "drunk");
-  if (drunkSeat) {
-    const inPlay = new Set(s.seats.map((seat) => seat.believedCharacterId));
-    // believed character must be a townsfolk id, and must not be a real dealt character
-    const dealtReal = new Set(s.seats.map((seat) => seat.characterId));
-    assert.equal(require("../games/botc/characters").teamOf(drunkSeat.believedCharacterId), "townsfolk");
-    assert.equal(dealtReal.has(drunkSeat.believedCharacterId), false);
-  }
+  assert.ok(drunkSeat, "the Drunk is always dealt when all three outsiders are");
+  // believed character must be a townsfolk id, and must not be a real dealt character
+  const dealtReal = new Set(s.seats.map((seat) => seat.characterId));
+  assert.equal(require("../games/botc/characters").teamOf(drunkSeat.believedCharacterId), "townsfolk");
+  assert.equal(dealtReal.has(drunkSeat.believedCharacterId), false);
 });

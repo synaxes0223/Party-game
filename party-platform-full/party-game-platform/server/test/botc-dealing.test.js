@@ -10,11 +10,12 @@ function seededState(names) {
   return s;
 }
 
-test("teamOf and charactersOfTeam reflect the thirteen-character registry", () => {
+test("teamOf and charactersOfTeam reflect the fourteen-character registry", () => {
   assert.equal(characters.teamOf("imp"), "demon");
   assert.equal(characters.teamOf("washerwoman"), "townsfolk");
   assert.equal(characters.teamOf("no-such-character"), null);
   assert.deepEqual(characters.charactersOfTeam("townsfolk").sort(), ["chef", "empath", "fortuneTeller", "investigator", "librarian", "monk", "soldier", "washerwoman"]);
+  assert.deepEqual(characters.charactersOfTeam("outsider").sort(), ["butler", "drunk", "saint"]);
   assert.deepEqual(characters.charactersOfTeam("minion").sort(), ["baron", "poisoner"]);
 });
 
@@ -57,18 +58,22 @@ test("teamCountsOf tallies the currently dealt seats by team", () => {
   assert.deepEqual(dealing.teamCountsOf(s), { townsfolk: 2, outsiders: 1, minions: 1, demon: 1 });
 });
 
-test("dealRandom deals exactly the requested character counts, using only this plan's seven characters, with no repeats", () => {
+test("dealRandom deals exactly the requested character counts, drawn from the registry, with no repeats", () => {
   const s = seededState(["p1", "p2", "p3", "p4", "p5", "p6", "p7"]);
   const result = dealing.dealRandom(s, { townsfolk: 3, outsiders: 1, minions: 2, demon: 1 });
   assert.equal(result.error, undefined);
   const dealtIds = s.seats.map((seat) => seat.characterId);
   assert.equal(new Set(dealtIds).size, 7, "no character repeated across seats");
   assert.deepEqual(dealing.teamCountsOf(s), { townsfolk: 3, outsiders: 1, minions: 2, demon: 1 });
-  // this plan has two outsiders (Butler, Drunk) and two minions (Poisoner, Baron) --
-  // requesting 1 outsider and 2 minions must draw from exactly those pools
-  assert.ok(dealtIds.includes("butler") || dealtIds.includes("drunk"));
-  assert.ok(dealtIds.includes("poisoner"));
-  assert.ok(dealtIds.includes("baron"));
+  // this plan has three outsiders (Butler, Drunk, Saint) and two minions
+  // (Poisoner, Baron). A randomized deal must satisfy team-shape invariants,
+  // never a specific id drawn from a shuffled pool.
+  const outsiders = dealtIds.filter((id) => characters.teamOf(id) === "outsider");
+  assert.equal(outsiders.length, 1);
+  assert.ok(characters.charactersOfTeam("outsider").includes(outsiders[0]));
+  const minions = dealtIds.filter((id) => characters.teamOf(id) === "minion");
+  assert.equal(minions.length, 2);
+  assert.deepEqual(minions.slice().sort(), characters.charactersOfTeam("minion").slice().sort());
   assert.ok(dealtIds.includes("imp"));
 });
 

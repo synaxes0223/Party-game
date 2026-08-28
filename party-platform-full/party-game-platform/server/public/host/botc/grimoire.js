@@ -11,7 +11,14 @@ const CHARACTERS = [
   { id: "washerwoman", label: "Washerwoman" },
   { id: "empath", label: "Empath" },
   { id: "soldier", label: "Soldier" },
+  { id: "chef", label: "Chef" },
+  { id: "investigator", label: "Investigator" },
+  { id: "librarian", label: "Librarian" },
+  { id: "monk", label: "Monk" },
+  { id: "fortuneTeller", label: "Fortune Teller" },
   { id: "butler", label: "Butler" },
+  { id: "drunk", label: "Drunk" },
+  { id: "saint", label: "Saint" },
   { id: "poisoner", label: "Poisoner" },
   { id: "baron", label: "Baron" },
   { id: "imp", label: "Imp" },
@@ -80,6 +87,13 @@ function renderSeatRow(seat, displayNumber) {
   reminderInput.placeholder = "Add reminder…";
   reminderInput.dataset.reminderInputFor = seat.seatId;
 
+  const reminderKindSelect = document.createElement("select");
+  reminderKindSelect.className = "input-field";
+  reminderKindSelect.dataset.reminderKindFor = seat.seatId;
+  reminderKindSelect.innerHTML = ["custom", "red-herring", "protected", "poisoned"]
+    .map((k) => `<option value="${k}">${k}</option>`)
+    .join("");
+
   const addReminderBtn = document.createElement("button");
   addReminderBtn.type = "button";
   addReminderBtn.className = "btn-secondary";
@@ -89,6 +103,7 @@ function renderSeatRow(seat, displayNumber) {
   controls.appendChild(charSelect);
   controls.appendChild(aliveBtn);
   controls.appendChild(reminderInput);
+  controls.appendChild(reminderKindSelect);
   controls.appendChild(addReminderBtn);
   row.appendChild(controls);
 
@@ -132,7 +147,9 @@ function wireSeatListDelegation() {
       const input = container.querySelector(`[data-reminder-input-for="${addSeatId}"]`);
       const label = input.value.trim();
       if (!label) return;
-      store.socket.emit("host:botc-add-reminder", { code: store.roomCode, seatId: Number(addSeatId), label });
+      const kindSelect = container.querySelector(`[data-reminder-kind-for="${addSeatId}"]`);
+      const kind = kindSelect ? kindSelect.value : "custom";
+      store.socket.emit("host:botc-add-reminder", { code: store.roomCode, seatId: Number(addSeatId), label, kind });
       input.value = "";
       return;
     }

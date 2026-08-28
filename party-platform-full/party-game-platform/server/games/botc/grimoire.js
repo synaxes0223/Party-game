@@ -12,9 +12,9 @@ function isPoisoned(seat) {
 }
 
 // Poisoned, or believing they're a different character than they truly are
-// (the Drunk's mechanism, not yet dealt by this plan's character set, but
-// the check has to exist now so the scheduler and every character's
-// computeCandidates are already correct when a Drunk is added later).
+// (the Drunk's mechanism -- the scheduler wakes the Drunk as their believed
+// character, and this check makes every character's computeCandidates treat
+// that seat as unreliable).
 function isImpaired(seat) {
   return isPoisoned(seat) || seat.characterId !== seat.believedCharacterId;
 }

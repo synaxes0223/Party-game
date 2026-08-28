@@ -15,7 +15,7 @@
 - Working directory for every command: `party-platform-full/party-game-platform/server/`.
 - No new runtime dependencies. The deployment runs offline on an Android phone under Termux.
 - No disk persistence.
-- Baseline before starting: **415 unit tests pass**, and every `test/e2e-*.js` script passes. Do not regress this.
+- Baseline before starting: **327 unit tests pass** (`npm test`), and every `test/e2e-*.js` script passes. Do not regress this.
 - Do not delete, skip, or comment out an existing test to make a change pass.
 - Source files have mixed CRLF/LF line endings. Match the file you are editing; do not reformat whole files. New files may use LF consistently.
 - Character ids are plain lowercase strings, except multi-word names which are camelCase (`fortuneTeller`), matching the parent spec's own example. Once a task introduces an id, keep it stable — it is a map key and is emitted to clients.
@@ -1799,7 +1799,7 @@ If the Imp does not target seat 6 on its own (the Imp is a choice step and `driv
 - [ ] **Step 4: Run the whole suite**
 
 Run: `node --test "test/*.test.js"` then each `test/e2e-*.js` script (or `npm test` plus the e2e scripts individually).
-Expected: unit total is now **415 + (new botc unit tests) ** and 0 failures; every e2e script passes.
+Expected: **0 failures** (unit total ~327 baseline + the new botc unit tests); every e2e script passes.
 
 - [ ] **Step 5: Commit**
 

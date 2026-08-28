@@ -23,14 +23,13 @@ function computeCandidates(state, seat) {
     ...characters.charactersOfTeam("townsfolk"),
     ...characters.charactersOfTeam("outsider"),
   ].filter((id) => !dealtIds.has(id));
-  // Accepted limitation of this vertical slice: only 4 good characters are
-  // implemented at all (washerwoman, empath, soldier, butler). A game that
-  // deals all of them -- e.g. a standard 6-player game, which is exactly 3
-  // townsfolk + 1 outsider per the distribution table -- leaves goodPool
-  // empty, so bluffs may end up with fewer than 3 entries (or none). This
-  // degrades safely (slice() never throws, and applyChoice/renderForPlayer
-  // both handle a short or empty bluffs array) and resolves naturally once
-  // more good characters exist in the character-library follow-up plan.
+  // The bluff pool is the good characters NOT in play. The curated library
+  // implements 11 good characters (8 townsfolk + Butler/Drunk/Saint), so a
+  // game that happens to deal nearly all of them can leave goodPool with
+  // fewer than 3 entries (or none). This degrades safely -- slice() never
+  // throws, and applyChoice/renderForPlayer both handle a short or empty
+  // bluffs array -- and stops mattering once the full 22-character script
+  // exists.
   const bluffs = shuffle(goodPool).slice(0, 3);
 
   return [{

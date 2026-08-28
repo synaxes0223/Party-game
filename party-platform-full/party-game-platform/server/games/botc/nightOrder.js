@@ -1,11 +1,14 @@
 // nightOrder.js
-// First-night and other-night order for the curated 16-character pool, as
-// data. Minion Info / Demon Info are pure reveals that don't depend on any
-// prior action, so they run first on the first night; the Poisoner acts
-// before the information Townsfolk so their reads can already be wrong.
+// First-night and other-night order for the curated character library, as
+// data. Covers the 14 registered characters (Virgin and Slayer, which have
+// no night step, land in the day-drama plan). Minion Info / Demon Info are
+// pure reveals that don't depend on any prior action, so they run first on
+// the first night; the Poisoner acts before the information Townsfolk so
+// their reads can already be wrong.
 //
-// VERIFIED 2026-08-28 against the official Trouble Brewing night sheet. A step id for a character not
-// yet dealt (or not yet implemented) is inert -- nightLoop.js skips it.
+// VERIFIED 2026-08-28 against the official Trouble Brewing night sheet. A
+// step id for a character not currently dealt is inert -- nightLoop.js
+// skips it.
 
 const FIRST_NIGHT_ORDER = [
   "minion-info",

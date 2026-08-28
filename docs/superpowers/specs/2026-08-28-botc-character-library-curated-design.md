@@ -99,9 +99,12 @@ Everything night-phase, plus the two characters resolved outside the day loop.
   every non-Drunk, so a dedicated path (e.g. `grimoire.setDrunk(seat,
   believedCharacterId)`) sets the split. `nightLoop` already schedules on
   `believedCharacterId` and `grimoire.isImpaired` already returns true when
-  `characterId !== believedCharacterId`, so the believed module runs and
-  surfaces only false candidates — Plan A verifies this end to end rather than
-  building it.
+  `characterId !== believedCharacterId`, so the believed module runs.
+  Its `computeCandidates` still returns both true and false options (the
+  same convention as a poisoned Washerwoman/Empath: the module offers, the
+  Storyteller decides); the host night panel groups them true-vs-false so
+  the Storyteller sends a false one for an impaired seat. Plan A verifies
+  the scheduling end to end rather than building it.
 - **Saint** — no night action. The win check gains an execution branch:
   when a seat is executed (`host:botc-execute`, and on-block execution) and
   that seat is a living good Saint, the verdict is

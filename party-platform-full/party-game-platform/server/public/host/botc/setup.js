@@ -5,9 +5,9 @@
 // manually (the Storyteller assigns every seat's character by hand).
 import { store, onStateChange } from "./store.js";
 
-// The vertical slice's 7 implemented characters. Team here is display-only
-// (grouping the manual-deal dropdown); the server independently derives the
-// authoritative team/alignment from the character id itself (dealing.js's
+// The registered characters. Team here is display-only (grouping the
+// manual-deal dropdown); the server independently derives the authoritative
+// team/alignment from the character id itself (dealing.js's
 // alignmentForTeam) -- this list drifting from characters/index.js's
 // TEAM_OF would only ever mislabel a dropdown group, never mis-assign an
 // actual alignment.
@@ -15,11 +15,23 @@ const CHARACTERS = [
   { id: "washerwoman", label: "Washerwoman", team: "Townsfolk" },
   { id: "empath", label: "Empath", team: "Townsfolk" },
   { id: "soldier", label: "Soldier", team: "Townsfolk" },
+  { id: "chef", label: "Chef", team: "Townsfolk" },
+  { id: "investigator", label: "Investigator", team: "Townsfolk" },
+  { id: "librarian", label: "Librarian", team: "Townsfolk" },
+  { id: "monk", label: "Monk", team: "Townsfolk" },
+  { id: "fortuneTeller", label: "Fortune Teller", team: "Townsfolk" },
   { id: "butler", label: "Butler", team: "Outsider" },
+  { id: "drunk", label: "Drunk", team: "Outsider" },
+  { id: "saint", label: "Saint", team: "Outsider" },
   { id: "poisoner", label: "Poisoner", team: "Minion" },
   { id: "baron", label: "Baron", team: "Minion" },
   { id: "imp", label: "Imp", team: "Demon" },
 ];
+
+// The Drunk is dealt as a Townsfolk they believe themselves to be; the
+// manual-deal row reveals a second <select> (these ids) for that believed
+// character, sent as believedCharacterId in the assignment.
+const TOWNSFOLK_IDS = CHARACTERS.filter((c) => c.team === "Townsfolk");
 
 // Local reordering happens purely client-side against this array of player
 // ids until Deal is clicked -- the server has no notion of "seat order"
@@ -95,8 +107,12 @@ function renderManualDealRows() {
   // (a full DOM rebuild discarding data the Storyteller already entered),
   // and reuses that same fix's dataset.playerId convention.
   const previousChoices = new Map();
-  container.querySelectorAll("select").forEach((select) => {
+  const previousBelieved = new Map();
+  container.querySelectorAll("select[data-player-id]").forEach((select) => {
     if (select.value) previousChoices.set(select.dataset.playerId, select.value);
+  });
+  container.querySelectorAll("select[data-believed-for]").forEach((select) => {
+    if (select.value) previousBelieved.set(select.dataset.believedFor, select.value);
   });
 
   container.innerHTML = "";
@@ -111,6 +127,20 @@ function renderManualDealRows() {
     if (previousChoices.has(playerId)) select.value = previousChoices.get(playerId);
     row.innerHTML = `<span>${seatNumber}. ${nicknameFor(playerId)}</span>`;
     row.appendChild(select);
+
+    // The Drunk needs a believed Townsfolk; reveal a second <select> for it
+    // only while this row's character is "drunk".
+    const believedSelect = document.createElement("select");
+    believedSelect.className = "input-field";
+    believedSelect.dataset.believedFor = playerId;
+    believedSelect.innerHTML = `<option value="">-- believes… --</option>` + TOWNSFOLK_IDS.map((c) => `<option value="${c.id}">${c.label}</option>`).join("");
+    if (previousBelieved.has(playerId)) believedSelect.value = previousBelieved.get(playerId);
+    believedSelect.hidden = select.value !== "drunk";
+    select.addEventListener("change", () => {
+      believedSelect.hidden = select.value !== "drunk";
+    });
+    row.appendChild(believedSelect);
+
     container.appendChild(row);
   });
 }
@@ -134,7 +164,7 @@ export function initSetup() {
 
   document.getElementById("btn-botc-manual-deal").addEventListener("click", () => {
     document.getElementById("botc-setup-error").textContent = "";
-    const selects = document.querySelectorAll("#botc-manual-deal-rows select");
+    const selects = document.querySelectorAll("#botc-manual-deal-rows select[data-player-id]");
     const assignments = [];
     for (const select of selects) {
       // Resolve this select's seat from its own player id against the
@@ -147,6 +177,16 @@ export function initSetup() {
       if (!characterId) {
         document.getElementById("botc-setup-error").textContent = "Assign a character to every seat before dealing manually.";
         return;
+      }
+      if (characterId === "drunk") {
+        const believedSelect = document.querySelector(`#botc-manual-deal-rows select[data-believed-for="${playerId}"]`);
+        const believedCharacterId = believedSelect && believedSelect.value;
+        if (!believedCharacterId) {
+          document.getElementById("botc-setup-error").textContent = "Choose the Townsfolk the Drunk believes they are.";
+          return;
+        }
+        assignments.push({ seatId, characterId, believedCharacterId });
+        continue;
       }
       assignments.push({ seatId, characterId });
     }
