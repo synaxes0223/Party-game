@@ -448,6 +448,68 @@ async function main() {
     room3.host.disconnect();
     players3.forEach((p) => p.socket.close());
 
+    // ---- Scenario 4: seat reordering and manual overrides ----
+    console.log("\n[Scenario 4] Post-deal seat reordering and every manual-override event");
+    const room4 = await createRoom();
+    const players4 = await joinPlayers(room4.roomCode, ["Alice4", "Bob4", "Carol4", "Dave4", "Eve4"]);
+
+    const dealtPromise4 = once(room4.host, "host:botc-state");
+    room4.host.emit("host:botc-manual-deal", {
+      code: room4.roomCode,
+      assignments: [
+        { seatId: 1, characterId: "washerwoman" },
+        { seatId: 2, characterId: "empath" },
+        { seatId: 3, characterId: "soldier" },
+        { seatId: 4, characterId: "butler" },
+        { seatId: 5, characterId: "imp" },
+      ],
+    });
+    let state4 = (await dealtPromise4).state;
+    const originalOrder4 = state4.seats.map((s) => s.nickname);
+    assertTrue(originalOrder4.join(",") === "Alice4,Bob4,Carol4,Dave4,Eve4", "the deal seated players in join order by default");
+
+    const reorderPromise4 = once(room4.host, "host:botc-state");
+    const reversedSeatIds4 = state4.seats.map((s) => s.seatId).reverse();
+    room4.host.emit("host:botc-reorder-seats", { code: room4.roomCode, seatIds: reversedSeatIds4 });
+    state4 = (await reorderPromise4).state;
+    assertTrue(
+      state4.seats.map((s) => s.nickname).join(",") === "Eve4,Dave4,Carol4,Bob4,Alice4",
+      "host:botc-reorder-seats re-orders the seat array to the given seatId order"
+    );
+
+    const aliceSeat4 = state4.seats.find((s) => s.nickname === "Alice4");
+    const setCharPromise4 = once(room4.host, "host:botc-state");
+    room4.host.emit("host:botc-set-character", { code: room4.roomCode, seatId: aliceSeat4.seatId, characterId: "poisoner" });
+    state4 = (await setCharPromise4).state;
+    const aliceAfter4 = state4.seats.find((s) => s.seatId === aliceSeat4.seatId);
+    assertTrue(aliceAfter4.characterId === "poisoner", "host:botc-set-character overrides the seat's true character");
+    assertTrue(aliceAfter4.believedCharacterId === "poisoner", "host:botc-set-character also updates believedCharacterId");
+    assertTrue(aliceAfter4.alignment === "evil", "host:botc-set-character derives alignment from the character's team, not a client-supplied value");
+
+    const setAlivePromise4 = once(room4.host, "host:botc-state");
+    room4.host.emit("host:botc-set-alive", { code: room4.roomCode, seatId: aliceSeat4.seatId, alive: false });
+    state4 = (await setAlivePromise4).state;
+    assertTrue(state4.seats.find((s) => s.seatId === aliceSeat4.seatId).alive === false, "host:botc-set-alive overrides life state directly");
+
+    const addReminderPromise4 = once(room4.host, "host:botc-state");
+    room4.host.emit("host:botc-add-reminder", { code: room4.roomCode, seatId: aliceSeat4.seatId, label: "Drunk (test)" });
+    state4 = (await addReminderPromise4).state;
+    const addedReminder4 = state4.seats.find((s) => s.seatId === aliceSeat4.seatId).reminders.find((r) => r.label === "Drunk (test)");
+    assertTrue(!!addedReminder4, "host:botc-add-reminder attaches a free-text custom reminder");
+    assertTrue(addedReminder4.kind === "custom", "a manually-added reminder is kind 'custom'");
+
+    const removeReminderPromise4 = once(room4.host, "host:botc-state");
+    room4.host.emit("host:botc-remove-reminder", { code: room4.roomCode, seatId: aliceSeat4.seatId, reminderId: addedReminder4.id });
+    state4 = (await removeReminderPromise4).state;
+    assertTrue(
+      !state4.seats.find((s) => s.seatId === aliceSeat4.seatId).reminders.some((r) => r.id === addedReminder4.id),
+      "host:botc-remove-reminder removes the reminder by id"
+    );
+    console.log("  PASS -- seat reordering, character/alignment override, alive override, and add/remove reminder all work");
+
+    room4.host.disconnect();
+    players4.forEach((p) => p.socket.close());
+
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
     process.exit(0);

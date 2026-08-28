@@ -256,6 +256,71 @@ function attach(io, socket, ctx) {
     });
   });
 
+  // Post-deal seat reordering (pre-deal ordering is seatOrder on
+  // host:botc-start/host:botc-manual-deal, added by Task 1) -- spec §6:
+  // "the Storyteller arranges seat order... and can reorder later."
+  socket.on("host:botc-reorder-seats", ({ code, seatIds }) => {
+    withHostRoom(code, (room) => {
+      const result = grimoire.reorderSeats(room.gameState, seatIds);
+      if (result.error) {
+        socket.emit("host:botc-error", { error: result.error });
+        return;
+      }
+      emitState(room, io);
+    });
+  });
+
+  // Manual character/alignment override -- alignment is always derived from
+  // the character's team (never accepted from the client separately), so a
+  // Storyteller can never accidentally set a mismatched pair like "imp" +
+  // "good".
+  socket.on("host:botc-set-character", ({ code, seatId, characterId }) => {
+    withHostRoom(code, (room) => {
+      const seat = stateModule.findSeatById(room.gameState, seatId);
+      if (!seat) return;
+      const team = characters.teamOf(characterId);
+      if (!team) return;
+      grimoire.setCharacter(seat, characterId, dealing.alignmentForTeam(team));
+      emitState(room, io);
+    });
+  });
+
+  // Manual life-state override -- covers both a Storyteller correcting a
+  // mistaken execution and reviving/killing a seat for any other reason the
+  // grimoire's own automation doesn't cover. host:botc-execute (unchanged)
+  // remains the normal path for an on-block execution.
+  socket.on("host:botc-set-alive", ({ code, seatId, alive }) => {
+    withHostRoom(code, (room) => {
+      const seat = stateModule.findSeatById(room.gameState, seatId);
+      if (!seat) return;
+      grimoire.setAlive(seat, alive);
+      applyWinCheckAndMaybeEnd(room, io);
+      emitState(room, io);
+    });
+  });
+
+  // Free-text reminder tokens -- every character's own applyChoice already
+  // adds its own typed reminders (poisoned, etc.) automatically; this is
+  // the Storyteller's manual escape hatch for anything the character
+  // modules don't cover (spec §6: "plus free-text custom tokens").
+  socket.on("host:botc-add-reminder", ({ code, seatId, label }) => {
+    withHostRoom(code, (room) => {
+      const seat = stateModule.findSeatById(room.gameState, seatId);
+      if (!seat || !label) return;
+      grimoire.addReminder(room.gameState, seat, "custom", null, label);
+      emitState(room, io);
+    });
+  });
+
+  socket.on("host:botc-remove-reminder", ({ code, seatId, reminderId }) => {
+    withHostRoom(code, (room) => {
+      const seat = stateModule.findSeatById(room.gameState, seatId);
+      if (!seat) return;
+      grimoire.removeReminder(seat, reminderId);
+      emitState(room, io);
+    });
+  });
+
   socket.on("host:botc-night-choice", ({ code, choice }) => {
     withHostRoom(code, (room) => {
       nightLoop.submitChoice(room.gameState, choice);

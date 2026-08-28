@@ -80,4 +80,4 @@ function shuffle(array) {
   return copy;
 }
 
-module.exports = { dealManual, dealRandom, teamCountsOf };
+module.exports = { dealManual, dealRandom, teamCountsOf, alignmentForTeam };
