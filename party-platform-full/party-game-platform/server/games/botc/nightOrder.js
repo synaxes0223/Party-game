@@ -1,31 +1,31 @@
 // nightOrder.js
-// First-night and other-night order for this plan's seven characters plus
-// the two pseudo-steps, as data. This encodes the Trouble Brewing structure
-// for the subset of characters this plan implements: Minion/Demon info are
-// pure reveals that don't depend on any prior action, so they run first on
-// the first night, before the Poisoner or any information Townsfolk.
+// First-night and other-night order for the curated 16-character pool, as
+// data. Minion Info / Demon Info are pure reveals that don't depend on any
+// prior action, so they run first on the first night; the Poisoner acts
+// before the information Townsfolk so their reads can already be wrong.
 //
-// VERIFIED (2026-08-27) against two independent Trouble Brewing night-order
-// references (an official night-sheet transcription and a night-order
-// lookup tool) -- both agree Minion Info and Demon Info precede the
-// Poisoner on the first night. This corrects the plan brief's draft order,
-// which had the Poisoner first; see task-9-report.md for the sources and
-// reasoning. Other-nights order (Poisoner, then Imp, then Empath, Butler)
-// matched both references as drafted.
+// VERIFIED 2026-08-28 against the official Trouble Brewing night sheet. A step id for a character not
+// yet dealt (or not yet implemented) is inert -- nightLoop.js skips it.
 
 const FIRST_NIGHT_ORDER = [
   "minion-info",
   "demon-info",
   "poisoner",
   "washerwoman",
+  "librarian",
+  "investigator",
+  "chef",
   "empath",
+  "fortuneTeller",
   "butler",
 ];
 
 const OTHER_NIGHTS_ORDER = [
   "poisoner",
+  "monk",
   "imp",
   "empath",
+  "fortuneTeller",
   "butler",
 ];
 
