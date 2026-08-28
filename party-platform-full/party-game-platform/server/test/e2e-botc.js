@@ -91,6 +91,71 @@ function firstOtherAliveSeat(step, state) {
   return alt ? alt.seatId : step.seatId;
 }
 
+async function scenario5_curatedCharacters() {
+  console.log("\n[Scenario 5] First-night info, a Drunk's split identity, a Monk save, a Saint execution loss");
+  const { host, roomCode } = await createRoom();
+  const players = await joinPlayers(roomCode, ["Ann", "Bo", "Cy", "Di", "Ed", "Fi", "Gu"]);
+
+  // Seat 5 is the Drunk who believes they are the Investigator.
+  const drunkRolePromise = once(players[4].socket, "game:botc-role");
+  const statePromise = once(host, "host:botc-state");
+  host.emit("host:botc-manual-deal", {
+    code: roomCode,
+    assignments: [
+      { seatId: 1, characterId: "chef" },
+      { seatId: 2, characterId: "librarian" },
+      { seatId: 3, characterId: "monk" },
+      { seatId: 4, characterId: "saint" },
+      { seatId: 5, characterId: "drunk", believedCharacterId: "investigator" },
+      { seatId: 6, characterId: "poisoner" },
+      { seatId: 7, characterId: "imp" },
+    ],
+  });
+  let state = (await statePromise).state;
+  assertTrue(state.phase === "night" && state.dayNumber === 1, "manual deal starts night 1");
+
+  const drunkSeat = state.seats.find((s) => s.characterId === "drunk");
+  assertTrue(drunkSeat && drunkSeat.believedCharacterId === "investigator",
+    "host grimoire shows seat 5 as Drunk believing Investigator");
+  const drunkRole = await drunkRolePromise;
+  assertTrue(drunkRole.characterId === "investigator",
+    "the Drunk's own phone shows the believed Investigator role, never 'drunk'");
+  console.log("  PASS -- the Drunk's split identity: grimoire holds the truth, the phone holds the belief");
+
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    if (step.stepId === "poisoner") return 2; // don't poison the Monk (seat 3)
+    return firstOtherAliveSeat(step, st);
+  });
+  assertTrue(state.phase === "day-discussion",
+    "first night (Chef, Librarian, Drunk-as-Investigator, Poisoner) resolved to day");
+  console.log("  PASS -- first-night info characters and the Drunk step all scheduled and resolved");
+
+  const n2 = once(host, "host:botc-state");
+  host.emit("host:botc-begin-night", { code: roomCode });
+  state = (await n2).state;
+  assertTrue(state.phase === "night" && state.dayNumber === 2, "night 2 started");
+
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    if (step.stepId === "monk") return 1;
+    if (step.stepId === "imp") return 1;
+    if (step.stepId === "poisoner") return 2;
+    return firstOtherAliveSeat(step, st);
+  });
+  const seat1 = state.seats.find((s) => s.seatId === 1);
+  assertTrue(seat1.alive === true, "the Monk-protected seat 1 survived the Demon kill");
+  console.log("  PASS -- Monk protection blocked the Demon kill");
+
+  const endPromise = once(host, "game:botc-ended");
+  host.emit("host:botc-execute", { code: roomCode, seatId: 4 });
+  const verdict = await endPromise;
+  assertTrue(verdict.winner === "evil", "executing the Saint ends the game for evil");
+  assertTrue(/Saint/.test(verdict.reason), "the verdict reason names the Saint");
+  console.log("  PASS -- executing the Saint hands the game to evil");
+
+  host.close();
+  players.forEach((p) => p.socket.close());
+}
+
 async function main() {
   const server = require("child_process");
   const proc = server.spawn(process.execPath, ["index.js"], {
@@ -509,6 +574,8 @@ async function main() {
 
     room4.host.disconnect();
     players4.forEach((p) => p.socket.close());
+
+    await scenario5_curatedCharacters();
 
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
