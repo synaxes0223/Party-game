@@ -188,7 +188,6 @@ async function main() {
     // reconnect.js's established idiom -- otherwise a fast server response
     // could fire these events before anything is listening for them.
     const roleAgainPromise = once(returningEmpath, "game:botc-role");
-    const stateAgainPromise = once(returningEmpath, "host:botc-state");
     const playerListAgainPromise = once(returningEmpath, "room:player-list");
     const rejoinedPromise = once(returningEmpath, "player:rejoined");
     returningEmpath.emit("player:join-room", { code: roomCode, nickname: "ignored-on-rejoin", token: empathPlayer.token });
@@ -198,7 +197,15 @@ async function main() {
     assertTrue(roleAgain.characterId === empathOriginalRole.characterId, "reconnect resends the same characterId");
     assertTrue(roleAgain.alignment === empathOriginalRole.alignment, "reconnect resends the same alignment");
 
-    const stateAgain = (await stateAgainPromise).state;
+    // The player no longer receives host:botc-state on rejoin (Step 1's
+    // fix) -- the same "did the reclaimed seat's state actually survive"
+    // fact this check exists to prove is read from the HOST's own state
+    // instead, which is legitimately entitled to it. This still exercises
+    // the real Task-12-era regression class (findSeatById vs
+    // findSeatByToken) this check was originally written to catch.
+    const hostStateAfterRejoinPromise = once(host, "host:botc-state");
+    host.emit("host:botc-request-state", { code: roomCode });
+    const stateAgain = (await hostStateAfterRejoinPromise).state;
     const empathSeatAgain = stateAgain.seats.find((s) => s.nickname === "Empath");
     assertTrue(empathSeatAgain.alive === true, "the reclaimed seat is still alive");
     assertTrue(empathSeatAgain.reminders.some((r) => r.kind === "poisoned"), "the reclaimed seat still shows the poisoned reminder");
@@ -363,6 +370,83 @@ async function main() {
 
     room2.host.disconnect();
     players2.forEach((p) => p.socket.close());
+
+    // ---- Scenario 3: host-truth state view, safe rejoin, on-demand state request ----
+    console.log("\n[Scenario 3] The host sees true character/alignment; a rejoining player never does; a fresh host connection can pull current state");
+    const room3 = await createRoom();
+    const players3 = await joinPlayers(room3.roomCode, ["Alice3", "Bob3", "Carol3", "Dave3", "Eve3"]);
+
+    const dealtPromise3 = once(room3.host, "host:botc-state");
+    room3.host.emit("host:botc-manual-deal", {
+      code: room3.roomCode,
+      assignments: [
+        { seatId: 1, characterId: "washerwoman" },
+        { seatId: 2, characterId: "empath" },
+        { seatId: 3, characterId: "soldier" },
+        { seatId: 4, characterId: "butler" },
+        { seatId: 5, characterId: "imp" },
+      ],
+    });
+    const state3 = (await dealtPromise3).state;
+
+    // The host's own state view must carry the truth for every seat -- this
+    // is what makes a real grimoire renderable at all.
+    const impSeat3 = state3.seats.find((s) => s.nickname === "Eve3");
+    assertTrue(impSeat3.characterId === "imp", "the host's state view includes each seat's true characterId");
+    assertTrue(impSeat3.believedCharacterId === "imp", "the host's state view includes each seat's believedCharacterId");
+    assertTrue(impSeat3.alignment === "evil", "the host's state view includes each seat's true alignment");
+
+    // A player reconnecting must NEVER receive that same truth. Rather than
+    // asserting the negative on a fixed timer (flaky either way), disconnect
+    // and reclaim the Imp's own seat, capture every event that arrives on
+    // their socket for a bounded window, and confirm characterId/alignment
+    // never appear anywhere in it -- including inside a re-sent role event,
+    // which is expected to carry the player's BELIEVED character only (an
+    // Imp's own role reveal legitimately includes their own characterId,
+    // which is not a leak of anyone ELSE's identity -- so this checks no
+    // OTHER seat's identity ever appears, and that host:botc-state itself
+    // never arrives on this socket at all).
+    const impPlayer3 = players3.find((p) => p.name === "Eve3");
+    impPlayer3.socket.disconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    const reconnectedImp3 = await connect();
+    const receivedEvents3 = [];
+    reconnectedImp3.onAny((event, payload) => receivedEvents3.push({ event, payload }));
+    reconnectedImp3.emit("player:join-room", { code: room3.roomCode, nickname: "Eve3", token: impPlayer3.token });
+    await new Promise((r) => setTimeout(r, 150)); // let every event onPlayerRejoined fires actually arrive
+    assertTrue(
+      !receivedEvents3.some((e) => e.event === "host:botc-state"),
+      "a reconnecting player's socket never receives host:botc-state at all"
+    );
+    // No payload delivered to this socket may contain a
+    // "believedCharacterId" field at all -- that field only ever appears
+    // inside a seat object in the host's publicStateView, so its presence
+    // anywhere in what this socket received is the specific fingerprint of
+    // the removed host:botc-state leak (and the "host:botc-state" check
+    // above already covers the event-name half of the same fact).
+    const serialized3 = JSON.stringify(receivedEvents3);
+    assertTrue(
+      !serialized3.includes("believedCharacterId"),
+      "no event delivered to a reconnecting player carries any seat's believedCharacterId"
+    );
+    reconnectedImp3.close();
+    console.log("  PASS -- the host's state view carries true character/alignment, and a rejoining player never receives it");
+
+    // A fresh host connection (simulating a reload/reconnect) can pull the
+    // current snapshot on demand instead of waiting for the next mutation.
+    const freshHostConn3 = await connect();
+    const reclaimedPromise3 = once(freshHostConn3, "host:room-reclaimed");
+    freshHostConn3.emit("host:reclaim-room", { code: room3.roomCode, token: room3.hostToken });
+    await reclaimedPromise3;
+    const requestedStatePromise3 = once(freshHostConn3, "host:botc-state");
+    freshHostConn3.emit("host:botc-request-state", { code: room3.roomCode });
+    const requestedState3 = (await requestedStatePromise3).state;
+    assertTrue(requestedState3.phase === "night", "host:botc-request-state returns the actual current snapshot, not a stale one");
+    console.log("  PASS -- a fresh host connection can pull the current state on demand via host:botc-request-state");
+
+    freshHostConn3.close();
+    room3.host.disconnect();
+    players3.forEach((p) => p.socket.close());
 
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
