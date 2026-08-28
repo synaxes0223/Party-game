@@ -152,6 +152,16 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
 
 .vote-btn.selected { border-color: var(--accent); background: rgba(255,95,162,0.12); }
 
+.slipup-others-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.slipup-entry-row { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
+
+.entry-checklist { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; max-height: 320px; overflow-y: auto; }
+.entry-row { display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 10px 14px; border-radius: 10px; }
+.entry-row input { width: 18px; height: 18px; }
+
+.toast { display: none; text-align: center; background: var(--accent); color: var(--text); padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
+.toast.show { display: block; animation: fadein 0.3s ease; }
+
 .word-reveal-text {
   text-align: center;
   font-size: 2.4rem;
@@ -270,3 +280,69 @@ h2 { font-size: 1.3rem; margin: 24px 0 12px; }
   box-shadow: 0 0 40px rgba(255,59,59,0.5);
 }
 .ptb-pass-btn:active { transform: scale(0.96); }
+
+.wheel-floating-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.wheel-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  z-index: 101;
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.wheel-panel.hidden { display: none; }
+
+.wheel-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.wheel-close-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.wheel-pointer {
+  width: 0;
+  height: 0;
+  margin: 0 auto;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 16px solid var(--text);
+}
+
+.wheel-add-row { display: flex; gap: 8px; margin: 12px 0; }
+.wheel-add-row input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent2);
+  background: transparent;
+  color: var(--text);
+}
+.wheel-add-row button { width: auto; padding: 10px 14px; }

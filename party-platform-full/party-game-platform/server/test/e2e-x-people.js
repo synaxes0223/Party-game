@@ -20,25 +20,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-xp-token-${String(tokenCounter++).padStart(4, "0")}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }

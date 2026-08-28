@@ -8,17 +8,23 @@
     "start": "node index.js",
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e-rounds.js",
-    "test:e2e-word-wolf": "node test/e2e-word-wolf.js",
     "test:e2e-audio": "node test/e2e-audio-sources.js",
+    "test:e2e-word-wolf": "node test/e2e-word-wolf.js",
     "test:e2e-who-wrote-that": "node test/e2e-who-wrote-that.js",
     "test:e2e-x-people": "node test/e2e-x-people.js",
     "test:e2e-pass-the-bomb": "node test/e2e-pass-the-bomb.js",
-    "test:e2e-secret-missions": "node test/e2e-secret-missions.js"
+    "test:e2e-secret-missions": "node test/e2e-secret-missions.js",
+    "test:e2e-slipup": "node test/e2e-slip-up.js",
+    "test:e2e-wheel": "node test/e2e-wheel.js",
+    "test:e2e-avalon": "node test/e2e-avalon.js",
+    "test:e2e-reconnect": "node test/e2e-reconnect.js",
+    "test:e2e-botc": "node test/e2e-botc.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
+    "qrcode-svg": "^1.1.0",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

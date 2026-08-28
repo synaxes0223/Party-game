@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Party Game Platform — Host</title>
 <link rel="stylesheet" href="/host/style.css" />
+<link rel="stylesheet" href="/host/botc/botc.css" />
 </head>
 <body>
   <div id="app">
@@ -20,6 +21,8 @@
         <span class="label">Room Code</span>
         <span id="room-code" class="room-code">----</span>
         <span id="join-url" class="join-url"></span>
+        <div id="join-qr" class="join-qr"></div>
+        <p id="join-url-alt" class="join-url-alt"></p>
       </div>
 
       <div class="players-panel">
@@ -52,6 +55,10 @@
       </div>
 
       <div id="tab-youtube" class="tab-panel">
+        <p id="yt-offline-notice" class="offline-notice" hidden>
+          No internet on this network — YouTube tracks cannot load. Use a
+          built-in pair or an uploaded file instead.
+        </p>
         <label class="field-label">Normal track URL
           <input id="yt-normal-url" class="input-field" placeholder="https://youtube.com/watch?v=..." />
         </label>
@@ -78,6 +85,39 @@
       <p id="track-select-error" class="error"></p>
     </section>
 
+    <section id="screen-setup" class="screen">
+      <h2>Set up Slip-Up</h2>
+      <p class="subtitle">Uncheck any built-in entry to leave it out, or add your own.</p>
+
+      <div id="entry-checklist" class="entry-checklist"></div>
+
+      <div class="custom-entry-form">
+        <label class="field-label">Add a custom entry
+          <input id="custom-entry-text" class="input-field" placeholder="e.g. juggle three oranges" />
+        </label>
+        <select id="custom-entry-type" class="input-field">
+          <option value="word">Word (avoid saying it)</option>
+          <option value="action">Action (avoid doing it)</option>
+        </select>
+        <button type="button" id="btn-add-custom-entry" class="btn-secondary">Add</button>
+      </div>
+      <ul id="custom-entry-list" class="custom-entry-list"></ul>
+
+      <button id="btn-slipup-start" class="btn-primary">Start Game</button>
+      <p id="slipup-setup-error" class="error"></p>
+    </section>
+
+    <section id="screen-referee" class="screen">
+      <h2>Slip-Up — Referee</h2>
+      <div id="referee-rows" class="referee-rows"></div>
+
+      <h3>Live Scoreboard</h3>
+      <ul id="slipup-scoreboard" class="results-list"></ul>
+
+      <button id="btn-slipup-end" class="btn-primary">End Game</button>
+      <p id="slipup-referee-error" class="error"></p>
+    </section>
+
     <section id="screen-word-select" class="screen">
       <h2 id="word-round-title">Round 1</h2>
       <p class="subtitle"><span id="word-active-count">0</span> players still in</p>
@@ -102,6 +142,36 @@
       </div>
 
       <p id="word-select-error" class="error"></p>
+    </section>
+
+    <section id="screen-avalon-setup" class="screen">
+      <h2>Set up Avalon</h2>
+      <p class="subtitle"><span id="avalon-player-count">0</span> players joined — Avalon needs 5-10.</p>
+      <button type="button" id="btn-avalon-start" class="btn-primary">Start Game</button>
+      <p id="avalon-setup-error" class="error"></p>
+    </section>
+
+    <section id="screen-avalon-role-reveal" class="screen">
+      <h2>Avalon</h2>
+      <p class="subtitle">Players are viewing their secret roles.</p>
+      <button type="button" id="btn-avalon-begin" class="btn-primary">Begin Quests</button>
+    </section>
+
+    <section id="screen-avalon-progress" class="screen">
+      <h2 id="avalon-progress-title">Avalon</h2>
+      <div class="progress-box">
+        <p id="avalon-progress-status">Waiting…</p>
+      </div>
+      <p id="avalon-quest-track" class="hint"></p>
+      <ul id="avalon-vote-breakdown" class="results-list"></ul>
+      <button type="button" id="btn-avalon-next-quest" class="btn-primary">Next Quest</button>
+    </section>
+
+    <section id="screen-avalon-results" class="screen">
+      <h2>Avalon — Game Over</h2>
+      <p id="avalon-winner-text" class="imposter-reveal"></p>
+      <ul id="avalon-role-list" class="results-list"></ul>
+      <button type="button" id="btn-avalon-play-again" class="btn-primary">Back to Lobby</button>
     </section>
 
     <section id="screen-word-round" class="screen">
@@ -411,9 +481,82 @@
       <button id="btn-play-again" class="btn-primary">Back to Lobby</button>
     </section>
 
+    <section id="screen-botc-setup" class="screen">
+      <h2>Set up Blood on the Clocktower</h2>
+      <p class="subtitle"><span id="botc-player-count">0</span> players joined.</p>
+      <p id="botc-distribution-hint" class="hint"></p>
+
+      <h3>Seat order (adjacency matters)</h3>
+      <ol id="botc-seat-order-list" class="botc-seat-order-list"></ol>
+
+      <button type="button" id="btn-botc-random-deal" class="btn-primary">Deal Randomly</button>
+
+      <h3>Or assign manually</h3>
+      <div id="botc-manual-deal-rows" class="botc-manual-deal-rows"></div>
+      <button type="button" id="btn-botc-manual-deal" class="btn-secondary">Deal These Characters</button>
+
+      <p id="botc-setup-error" class="error"></p>
+    </section>
+
+    <section id="screen-botc-grimoire" class="screen">
+      <div class="botc-grimoire-header">
+        <h2 id="botc-phase-title">Blood on the Clocktower</h2>
+        <button type="button" id="btn-botc-cover" class="btn-secondary">🙈 Cover</button>
+      </div>
+
+      <div id="botc-ended-banner" class="botc-ended-banner" hidden></div>
+
+      <div id="botc-night-panel" class="botc-panel" hidden>
+        <h3 id="botc-night-step-title"></h3>
+        <div id="botc-night-candidate-area" class="botc-candidate-list"></div>
+        <div id="botc-night-choice-area" class="botc-target-grid"></div>
+        <button type="button" id="btn-botc-begin-night" class="btn-primary" hidden>
+          Begin Night <span id="botc-begin-night-number"></span>
+        </button>
+      </div>
+
+      <div id="botc-day-panel" class="botc-panel" hidden>
+        <div class="botc-nominate-row">
+          <select id="botc-nominator-select" class="input-field"></select>
+          <span>nominates</span>
+          <select id="botc-nominee-select" class="input-field"></select>
+          <button type="button" id="btn-botc-nominate" class="btn-secondary">Nominate</button>
+        </div>
+        <div id="botc-vote-tally" class="botc-vote-tally"></div>
+        <div id="botc-onblock" class="botc-onblock"></div>
+        <button type="button" id="btn-botc-execute" class="btn-primary" hidden>Execute</button>
+      </div>
+
+      <div id="botc-seat-list" class="botc-seat-list"></div>
+
+      <div id="botc-cover-screen" class="botc-cover-screen" hidden>
+        <p>Grimoire hidden.</p>
+        <button type="button" id="btn-botc-uncover" class="btn-primary">Reveal Grimoire</button>
+      </div>
+    </section>
+
+  </div>
+
+  <button id="btn-wheel-toggle" class="wheel-floating-btn">🎡 Wheel</button>
+  <div id="wheel-panel" class="wheel-panel hidden">
+    <div class="wheel-panel-header">
+      <h2>Punishment Wheel</h2>
+      <button id="btn-wheel-close" class="wheel-close-btn">×</button>
+    </div>
+    <div class="wheel-pointer"></div>
+    <canvas id="wheel-canvas" width="280" height="280"></canvas>
+    <button id="btn-wheel-spin" class="btn-primary">Spin</button>
+    <div id="wheel-result"></div>
+    <div class="wheel-add-row">
+      <input id="wheel-add-input" type="text" placeholder="Add a punishment..." />
+      <button id="btn-wheel-add" class="btn-primary">Add</button>
+    </div>
+    <ul id="wheel-item-list"></ul>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/session.js"></script>
   <script src="/host/host.js"></script>
+  <script type="module" src="/host/botc/main.js"></script>
 </body>
 </html>

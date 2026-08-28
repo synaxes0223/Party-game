@@ -91,7 +91,7 @@ function startRoundWithPrompt(room, io, prompt) {
   room.state = "in-progress";
 
   io.in(room.code).emit("game:prompt", { round: gs.round, text: prompt.text });
-  io.to(room.hostSocketId).emit("game:answer-progress", { answered: 0, total: activePlayerIds(room).length });
+  io.to(room.hostId).emit("game:answer-progress", { answered: 0, total: activePlayerIds(room).length });
   return {};
 }
 
@@ -133,7 +133,7 @@ function onPromptSubmitted(room, io, socketId, text) {
   const insertAt = Math.floor(Math.random() * (gs.promptState.queue.length + 1));
   gs.promptState.queue.splice(insertAt, 0, entry);
 
-  io.to(room.hostSocketId).emit("game:submission-count", { count: gs.promptState.queue.length });
+  io.to(room.hostId).emit("game:submission-count", { count: gs.promptState.queue.length });
   return {};
 }
 
@@ -145,7 +145,7 @@ function onSubmitAnswer(room, io, socketId, text) {
 
   gs.pendingAnswers.set(socketId, trimmed);
   const total = activePlayerIds(room).length;
-  io.to(room.hostSocketId).emit("game:answer-progress", { answered: gs.pendingAnswers.size, total });
+  io.to(room.hostId).emit("game:answer-progress", { answered: gs.pendingAnswers.size, total });
 
   if (gs.pendingAnswers.size >= total) advanceToGuessing(room, io);
   return {};
@@ -196,7 +196,7 @@ function onVoteAuthor(room, io, socketId, votedForId) {
   }
 
   gs.votes.set(socketId, votedForId);
-  io.to(room.hostSocketId).emit("game:vote-progress", { voted: gs.votes.size, total: voterIds.length });
+  io.to(room.hostId).emit("game:vote-progress", { voted: gs.votes.size, total: voterIds.length });
 
   if (gs.votes.size >= voterIds.length) resolveAnswerReveal(room, io);
   return {};
@@ -258,7 +258,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "round-results") return { error: "No round result to advance from." };
   gs.phase = "prompt-select";
-  io.to(room.hostSocketId).emit("game:prompt-select-ready", {});
+  io.to(room.hostId).emit("game:prompt-select-ready", {});
   return {};
 }
 

@@ -2,94 +2,167 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const roomService = require("../roomService");
 
-// roomService keeps its `rooms` map at module scope (no per-test reset), so
-// every socketId used below must be unique across the whole file -- reusing
-// a literal like "p1" in two tests would let removePlayer/markDisconnected/
-// findRoomByPlayer (which scan all rooms for a matching socketId) touch the
-// wrong room's player entry.
+// Ruling 1: `rooms` inside roomService.js is a module-level Map that is never
+// reset between tests, and markPlayerDisconnected scans every room for the
+// token. Sharing token constants across tests risks a later test's call
+// finding a room left behind by an earlier test. Give every test its own
+// unique tokens via a counter so each test only ever touches its own room.
+let tokenCounter = 0;
+function freshTokens() {
+  tokenCounter += 1;
+  return {
+    host: `hosthosthost${tokenCounter}`,
+    a: `tokenaaaaaaaa${tokenCounter}`,
+    b: `tokenbbbbbbbb${tokenCounter}`,
+  };
+}
 
-test("joinRoom sets connected: true and rejects unknown nicknames mid-game without allowReconnect", () => {
-  const room = roomService.createRoom("host1");
-  roomService.joinRoom(room.code, "t1-p1", "Alice");
-  assert.equal(room.players.get("t1-p1").connected, true);
-
-  room.state = "in-progress";
-  const result = roomService.joinRoom(room.code, "t1-p2", "Bob");
-  assert.equal(result.error, "Game already in progress");
+test("a room is created with the host id and host marked connected", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  assert.equal(room.hostId, HOST);
+  assert.equal(room.hostConnected, true);
+  assert.equal(room.hostDisconnectedAt, null);
 });
 
-test("joinRoom rejects mid-game join for an unrecognized nickname even with allowReconnect", () => {
-  const room = roomService.createRoom("host2");
-  roomService.joinRoom(room.code, "t2-p1", "Alice");
-  room.state = "in-progress";
-
-  const result = roomService.joinRoom(room.code, "t2-p2", "Nobody", { allowReconnect: true });
-  assert.equal(result.error, "Game already in progress");
-});
-
-test("joinRoom reclaims a disconnected player's record onto a new socketId", () => {
-  const room = roomService.createRoom("host3");
-  roomService.joinRoom(room.code, "t3-p1", "Alice");
-  room.state = "in-progress";
-  roomService.markDisconnected("t3-p1");
-  assert.equal(room.players.get("t3-p1").connected, false);
-
-  const result = roomService.joinRoom(room.code, "t3-p1-new", "alice", { allowReconnect: true });
+test("joining stores the player under their token and reports a fresh join", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  const result = roomService.joinRoom(room.code, TOKEN_A, "Alice");
   assert.equal(result.error, undefined);
-  assert.equal(result.reclaimed, true);
-  assert.equal(result.oldSocketId, "t3-p1");
-  assert.equal(room.players.has("t3-p1"), false);
-  const reclaimed = room.players.get("t3-p1-new");
-  assert.equal(reclaimed.connected, true);
-  assert.equal(reclaimed.id, "t3-p1-new");
-  assert.equal(reclaimed.nickname, "Alice");
+  assert.equal(result.rejoined, false);
+  const player = result.room.players.get(TOKEN_A);
+  assert.equal(player.id, TOKEN_A);
+  assert.equal(player.nickname, "Alice");
+  assert.equal(player.connected, true);
 });
 
-test("joinRoom does not reclaim a still-connected player's record", () => {
-  const room = roomService.createRoom("host4");
-  roomService.joinRoom(room.code, "t4-p1", "Alice");
-  room.state = "in-progress";
+test("the same token joining again reclaims the seat rather than duplicating", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  const again = roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  assert.equal(again.rejoined, true);
+  assert.equal(again.room.players.size, 1);
+});
 
-  const result = roomService.joinRoom(room.code, "t4-p2", "Alice", { allowReconnect: true });
+test("a disconnect in the lobby removes the player outright", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  const result = roomService.markPlayerDisconnected(TOKEN_A);
+  assert.equal(result.removed, true);
+  assert.equal(result.room.players.has(TOKEN_A), false);
+});
+
+test("a disconnect mid-game keeps the seat and flags it disconnected", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  room.state = "in-progress";
+  const result = roomService.markPlayerDisconnected(TOKEN_A);
+  assert.equal(result.removed, false);
+  const player = result.room.players.get(TOKEN_A);
+  assert.equal(player.connected, false);
+  assert.ok(typeof player.disconnectedAt === "number");
+});
+
+test("a disconnected player rejoins mid-game and is connected again", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  room.state = "in-progress";
+  roomService.markPlayerDisconnected(TOKEN_A);
+  const back = roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  assert.equal(back.rejoined, true);
+  const player = back.room.players.get(TOKEN_A);
+  assert.equal(player.connected, true);
+  assert.equal(player.disconnectedAt, null);
+});
+
+test("an unknown token still cannot join a game in progress", () => {
+  const { host: HOST, b: TOKEN_B } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  room.state = "in-progress";
+  const result = roomService.joinRoom(room.code, TOKEN_B, "Bob");
   assert.equal(result.error, "Game already in progress");
 });
 
-test("markDisconnected flags the player without removing them", () => {
-  const room = roomService.createRoom("host5");
-  roomService.joinRoom(room.code, "t5-p1", "Alice");
-  const returnedRoom = roomService.markDisconnected("t5-p1");
-  assert.equal(returnedRoom.code, room.code);
-  assert.equal(room.players.has("t5-p1"), true);
-  assert.equal(room.players.get("t5-p1").connected, false);
+test("nickname collisions are still rejected for new players", () => {
+  const { host: HOST, a: TOKEN_A, b: TOKEN_B } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  const result = roomService.joinRoom(room.code, TOKEN_B, "alice");
+  assert.equal(result.error, "Nickname already taken in this room");
 });
 
-test("markDisconnected on an unknown socket returns null", () => {
-  roomService.createRoom("host6");
-  assert.equal(roomService.markDisconnected("t6-no-such-socket"), null);
-});
-
-test("findRoomByPlayer locates the room containing a given socketId", () => {
-  const room = roomService.createRoom("host7");
-  roomService.joinRoom(room.code, "t7-p1", "Alice");
-  const found = roomService.findRoomByPlayer("t7-p1");
-  assert.equal(found.code, room.code);
-  assert.equal(roomService.findRoomByPlayer("t7-nope"), null);
-});
-
-test("removePlayer still fully deletes a player (unaffected by reconnect changes)", () => {
-  const room = roomService.createRoom("host8");
-  roomService.joinRoom(room.code, "t8-p1", "Alice");
-  roomService.removePlayer("t8-p1");
-  assert.equal(room.players.has("t8-p1"), false);
-});
-
-test("publicRoomView reports connected: true by default and false after markDisconnected", () => {
-  const room = roomService.createRoom("host9");
-  roomService.joinRoom(room.code, "t9-p1", "Alice");
-  let view = roomService.publicRoomView(room);
+test("publicRoomView exposes connection state", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  const view = roomService.publicRoomView(room);
+  assert.equal(view.players[0].id, TOKEN_A);
   assert.equal(view.players[0].connected, true);
+});
 
-  roomService.markDisconnected("t9-p1");
-  view = roomService.publicRoomView(room);
-  assert.equal(view.players[0].connected, false);
+test("a host disconnect flags the host but keeps the room alive", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  const found = roomService.markHostDisconnected(HOST);
+  assert.equal(found.code, room.code);
+  assert.equal(found.hostConnected, false);
+  assert.ok(typeof found.hostDisconnectedAt === "number");
+  assert.ok(roomService.getRoom(room.code), "room must still exist");
+});
+
+test("the same host token reclaims the room", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  const back = roomService.reclaimHost(room.code, HOST);
+  assert.equal(back.code, room.code);
+  assert.equal(back.hostConnected, true);
+  assert.equal(back.hostDisconnectedAt, null);
+});
+
+test("a different token cannot reclaim someone else's room", () => {
+  const { host: HOST, b: TOKEN_B } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  assert.equal(roomService.reclaimHost(room.code, TOKEN_B), null);
+});
+
+const MINUTE = 60 * 1000;
+
+test("a room with anyone still connected is never swept", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  roomService.markHostDisconnected(HOST);
+  const deleted = roomService.sweepAbandonedRooms(Date.now() + 60 * MINUTE, 10 * MINUTE);
+  assert.equal(deleted.includes(room.code), false);
+});
+
+test("a fully abandoned room survives until the grace period elapses", () => {
+  const { host: HOST, a: TOKEN_A } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  room.state = "in-progress";
+  roomService.joinRoom(room.code, TOKEN_A, "Alice");
+  roomService.markPlayerDisconnected(TOKEN_A);
+  roomService.markHostDisconnected(HOST);
+
+  const early = roomService.sweepAbandonedRooms(Date.now() + 1 * MINUTE, 10 * MINUTE);
+  assert.equal(early.includes(room.code), false);
+
+  const late = roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE);
+  assert.equal(late.includes(room.code), true);
+  assert.equal(roomService.getRoom(room.code), undefined);
+});
+
+test("an empty room whose host left is swept after the grace period", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  const deleted = roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE);
+  assert.equal(deleted.includes(room.code), true);
 });

@@ -1,0 +1,450 @@
+// avalon.js
+// Game module: The Resistance: Avalon (base roles + Percival/Morgana). Hidden
+// good/evil roles, a leader rotates and proposes a quest team each round,
+// everyone publicly votes to approve/reject the team, an approved team
+// secretly passes or fails the quest, and three failed/successful quests
+// decide the game — unless Good wins three quests, in which case the
+// Assassin gets one guess at Merlin's identity to steal the win for Evil.
+//
+// Single-file game module by design: constants, pure helpers, and the
+// socket-facing on* handlers all live here together (no sibling
+// avalonLogic.js), unlike Word Wolf/Find the Imposter/Slip-Up.
+
+const meta = {
+  id: "avalon",
+  name: "Avalon",
+  description:
+    "Hidden roles, secret missions. Merlin and the loyal servants must complete three quests before the minions of Mordred sabotage three of them — and even then, the Assassin gets one shot at unmasking Merlin.",
+  minPlayers: 5,
+  maxPlayers: 10,
+  supportedModes: ["multiplayer"],
+};
+
+// Official Avalon table for 5-10 players. doubleFailQuestIndex is the
+// 0-based quest index (quest 4 == index 3) that requires two fails instead
+// of one to fail the quest; null means every quest in that row needs just 1.
+const ROLE_TABLE = {
+  5: { evilCount: 2, teamSizes: [2, 3, 2, 3, 3], doubleFailQuestIndex: null },
+  6: { evilCount: 2, teamSizes: [2, 3, 4, 3, 4], doubleFailQuestIndex: null },
+  7: { evilCount: 3, teamSizes: [2, 3, 3, 4, 4], doubleFailQuestIndex: 3 },
+  8: { evilCount: 3, teamSizes: [3, 4, 4, 5, 5], doubleFailQuestIndex: 3 },
+  9: { evilCount: 3, teamSizes: [3, 4, 4, 5, 5], doubleFailQuestIndex: 3 },
+  10: { evilCount: 4, teamSizes: [3, 4, 4, 5, 5], doubleFailQuestIndex: 3 },
+};
+
+const EVIL_ROLES = new Set(["assassin", "morgana", "minion"]);
+
+function getRoleTable(playerCount) {
+  return ROLE_TABLE[playerCount] || null;
+}
+
+function shuffle(array) {
+  const result = array.slice();
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function assignRoles(playerIds) {
+  const table = getRoleTable(playerIds.length);
+  if (!table) {
+    return { error: `Avalon needs 5-10 players (got ${playerIds.length}).` };
+  }
+
+  const shuffled = shuffle(playerIds);
+  const evilIds = shuffled.slice(0, table.evilCount);
+  const goodIds = shuffled.slice(table.evilCount);
+
+  const roles = new Map();
+  goodIds.forEach((id, i) => {
+    if (i === 0) roles.set(id, "merlin");
+    else if (i === 1) roles.set(id, "percival");
+    else roles.set(id, "loyal-servant");
+  });
+  evilIds.forEach((id, i) => {
+    if (i === 0) roles.set(id, "assassin");
+    else if (i === 1) roles.set(id, "morgana");
+    else roles.set(id, "minion");
+  });
+
+  return { roles };
+}
+
+function findIdByRole(roles, roleName) {
+  for (const [id, role] of roles.entries()) {
+    if (role === roleName) return id;
+  }
+  return null;
+}
+
+function computeKnowledge(roles, nicknames) {
+  const nickOf = (id) => nicknames.get(id) || "";
+  const evilIds = Array.from(roles.entries())
+    .filter(([, role]) => EVIL_ROLES.has(role))
+    .map(([id]) => id);
+  const merlinId = findIdByRole(roles, "merlin");
+  const morganaId = findIdByRole(roles, "morgana");
+
+  const knowledge = new Map();
+  for (const [id, role] of roles.entries()) {
+    const team = EVIL_ROLES.has(role) ? "evil" : "good";
+    let evilPlayers = [];
+    let percivalPair = null;
+
+    if (role === "merlin") {
+      evilPlayers = evilIds.map((eid) => ({ id: eid, nickname: nickOf(eid) }));
+    } else if (role === "percival") {
+      percivalPair = shuffle([
+        { id: merlinId, nickname: nickOf(merlinId) },
+        { id: morganaId, nickname: nickOf(morganaId) },
+      ]);
+    } else if (EVIL_ROLES.has(role)) {
+      evilPlayers = evilIds.filter((eid) => eid !== id).map((eid) => ({ id: eid, nickname: nickOf(eid) }));
+    }
+
+    knowledge.set(id, { role, team, evilPlayers, percivalPair });
+  }
+  return knowledge;
+}
+
+function tallyTeamVote(teamVotes) {
+  let approveCount = 0;
+  let rejectCount = 0;
+  for (const approve of teamVotes.values()) {
+    if (approve) approveCount++;
+    else rejectCount++;
+  }
+  return { approved: approveCount > rejectCount, approveCount, rejectCount };
+}
+
+function resolveQuest(questVotes, requiresDoubleFail) {
+  let failCount = 0;
+  for (const success of questVotes.values()) {
+    if (!success) failCount++;
+  }
+  const threshold = requiresDoubleFail ? 2 : 1;
+  return failCount >= threshold ? "fail" : "success";
+}
+
+function nextLeaderIndex(currentIndex, playerCount) {
+  return (currentIndex + 1) % playerCount;
+}
+
+function countQuestResults(questResults) {
+  const successCount = questResults.filter((r) => r === "success").length;
+  const failCount = questResults.filter((r) => r === "fail").length;
+  return { successCount, failCount };
+}
+
+function getPlayerIds(room) {
+  return Array.from(room.players.keys());
+}
+
+// Filters `ids` down to the currently-connected ones, for quorum checks
+// (team vote / quest vote) that must wait on every player who can actually
+// still act -- not just on a vote count, since a stale vote cast before a
+// player disconnected must not stand in for a still-connected player who
+// hasn't voted yet. A missing/undefined `connected` field counts as
+// connected (keeps pre-session-token fixtures working); only an explicit
+// `connected === false` excludes a player.
+function getConnectedIds(room, ids) {
+  return ids.filter((id) => {
+    const player = room.players.get(id);
+    return !player || player.connected !== false;
+  });
+}
+
+function broadcastRoles(room, io, knowledge) {
+  for (const [id, k] of knowledge.entries()) {
+    io.to(id).emit("game:avalon-role", {
+      role: k.role,
+      team: k.team,
+      evilPlayers: k.evilPlayers,
+      percivalPair: k.percivalPair,
+    });
+  }
+}
+
+function broadcastState(room, io) {
+  const gs = room.gameState;
+  const leaderId = gs.playerOrder[gs.leaderIndex] || null;
+  const leaderNickname = leaderId ? gs.nicknames.get(leaderId) : null;
+  const currentTeam = gs.currentTeam
+    ? gs.currentTeam.map((id) => ({ id, nickname: gs.nicknames.get(id) }))
+    : null;
+
+  io.in(room.code).emit("game:avalon-state", {
+    phase: gs.phase,
+    leaderId,
+    leaderNickname,
+    questIndex: gs.questIndex,
+    teamSize: gs.teamSizes[gs.questIndex] || null,
+    currentTeam,
+    rejectionCount: gs.rejectionCount,
+    questResults: gs.questResults,
+    assassinId: gs.phase === "assassin" ? gs.assassinId : null,
+    winner: gs.winner,
+  });
+}
+
+function onStartGame(room, io) {
+  if (room.gameState && room.gameState.phase !== "game-over") {
+    return { error: "Game already in progress." };
+  }
+
+  const playerIds = getPlayerIds(room);
+  const table = getRoleTable(playerIds.length);
+  if (!table) {
+    return { error: `Avalon needs 5-10 players (got ${playerIds.length}).` };
+  }
+
+  const nicknames = new Map(playerIds.map((id) => [id, room.players.get(id).nickname]));
+  const { roles } = assignRoles(playerIds);
+  const knowledge = computeKnowledge(roles, nicknames);
+  const assassinId = findIdByRole(roles, "assassin");
+
+  room.state = "in-progress";
+  room.gameState = {
+    phase: "role-reveal",
+    playerOrder: shuffle(playerIds),
+    nicknames,
+    roles,
+    leaderIndex: 0,
+    questIndex: 0,
+    teamSizes: table.teamSizes,
+    doubleFailQuestIndex: table.doubleFailQuestIndex,
+    questResults: [],
+    rejectionCount: 0,
+    currentTeam: null,
+    teamVotes: new Map(),
+    questVotes: new Map(),
+    assassinId,
+    winner: null,
+  };
+
+  broadcastRoles(room, io, knowledge);
+  broadcastState(room, io);
+  return {};
+}
+
+function onHostBeginQuests(room, io) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "role-reveal") return { error: "Not ready to begin quests." };
+  gs.phase = "team-proposal";
+  broadcastState(room, io);
+  return {};
+}
+
+function onProposeTeam(room, io, socketId, teamPlayerIds) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "team-proposal") return;
+  const leaderId = gs.playerOrder[gs.leaderIndex];
+  if (socketId !== leaderId) return;
+
+  const requiredSize = gs.teamSizes[gs.questIndex];
+  const ids = Array.isArray(teamPlayerIds) ? Array.from(new Set(teamPlayerIds)) : [];
+  const validIds = ids.filter((id) => gs.playerOrder.includes(id));
+  if (validIds.length !== requiredSize) {
+    io.to(socketId).emit("game:avalon-propose-rejected", {
+      reason: `Pick exactly ${requiredSize} players.`,
+    });
+    return;
+  }
+
+  gs.currentTeam = validIds;
+  gs.teamVotes = new Map();
+  gs.phase = "team-vote";
+  broadcastState(room, io);
+}
+
+function broadcastResults(room, io) {
+  const gs = room.gameState;
+  const roles = gs.playerOrder.map((id) => ({
+    id,
+    nickname: gs.nicknames.get(id),
+    role: gs.roles.get(id),
+    team: EVIL_ROLES.has(gs.roles.get(id)) ? "evil" : "good",
+  }));
+  io.in(room.code).emit("game:avalon-results", {
+    winner: gs.winner,
+    roles,
+    questResults: gs.questResults,
+  });
+}
+
+function resolveTeamVote(room, io) {
+  const gs = room.gameState;
+  const tally = tallyTeamVote(gs.teamVotes);
+  const votes = Array.from(gs.teamVotes.entries()).map(([id, approve]) => ({
+    id,
+    nickname: gs.nicknames.get(id),
+    approve,
+  }));
+
+  io.in(room.code).emit("game:avalon-team-vote-result", {
+    approved: tally.approved,
+    votes,
+    rejectionCount: gs.rejectionCount,
+  });
+
+  if (tally.approved) {
+    gs.phase = "quest";
+    gs.questVotes = new Map();
+  } else {
+    gs.rejectionCount += 1;
+    gs.currentTeam = null;
+    if (gs.rejectionCount >= 5) {
+      gs.phase = "game-over";
+      gs.winner = "evil";
+      room.state = "results";
+    } else {
+      gs.leaderIndex = nextLeaderIndex(gs.leaderIndex, gs.playerOrder.length);
+      gs.phase = "team-proposal";
+    }
+  }
+
+  broadcastState(room, io);
+  if (gs.phase === "game-over") broadcastResults(room, io);
+}
+
+function onTeamVote(room, io, socketId, approve) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "team-vote") return;
+  if (!gs.playerOrder.includes(socketId)) return;
+  gs.teamVotes.set(socketId, !!approve);
+
+  const connectedIds = getConnectedIds(room, gs.playerOrder);
+  if (connectedIds.length > 0 && connectedIds.every((id) => gs.teamVotes.has(id))) {
+    resolveTeamVote(room, io);
+  }
+}
+
+function advanceAfterQuestVotes(room, io) {
+  const gs = room.gameState;
+  const requiresDoubleFail = gs.questIndex === gs.doubleFailQuestIndex;
+  const outcome = resolveQuest(gs.questVotes, requiresDoubleFail);
+  gs.questResults.push(outcome);
+
+  io.in(room.code).emit("game:avalon-quest-result", {
+    questIndex: gs.questIndex,
+    outcome,
+    questResults: gs.questResults,
+  });
+
+  const { successCount, failCount } = countQuestResults(gs.questResults);
+
+  if (failCount >= 3) {
+    gs.phase = "game-over";
+    gs.winner = "evil";
+    room.state = "results";
+  } else if (successCount >= 3) {
+    gs.phase = "assassin";
+  } else {
+    gs.rejectionCount = 0;
+    gs.leaderIndex = nextLeaderIndex(gs.leaderIndex, gs.playerOrder.length);
+    gs.questIndex += 1;
+    gs.currentTeam = null;
+    gs.phase = "quest-result";
+  }
+
+  broadcastState(room, io);
+  if (gs.phase === "game-over") broadcastResults(room, io);
+}
+
+function onQuestVote(room, io, socketId, success) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "quest") return;
+  if (!gs.currentTeam || !gs.currentTeam.includes(socketId)) return;
+
+  const role = gs.roles.get(socketId);
+  const isEvil = EVIL_ROLES.has(role);
+  if (success === false && !isEvil) {
+    io.to(socketId).emit("game:avalon-quest-vote-rejected", {
+      reason: "Only Evil players can fail a quest.",
+    });
+    return;
+  }
+
+  gs.questVotes.set(socketId, !!success);
+
+  const connectedIds = getConnectedIds(room, gs.currentTeam);
+  if (connectedIds.length > 0 && connectedIds.every((id) => gs.questVotes.has(id))) {
+    advanceAfterQuestVotes(room, io);
+  }
+}
+
+function onNextRound(room, io) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "quest-result") return { error: "Not ready for the next quest." };
+  gs.phase = "team-proposal";
+  broadcastState(room, io);
+  return {};
+}
+
+function onAssassinGuess(room, io, socketId, targetId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== "assassin") return;
+  if (socketId !== gs.assassinId) return;
+
+  const targetRole = gs.roles.get(targetId);
+  gs.winner = targetRole === "merlin" ? "evil" : "good";
+  gs.phase = "game-over";
+  room.state = "results";
+
+  broadcastState(room, io);
+  broadcastResults(room, io);
+}
+
+function onPlayerLeft(room, io, socketId) {
+  const gs = room.gameState;
+  if (!gs || gs.phase === "game-over") return;
+  gs.phase = "game-over";
+  gs.winner = null;
+  room.state = "results";
+  broadcastResults(room, io);
+}
+
+// A reconnecting player lost their private role reveal. computeKnowledge is
+// cheap and pure, so recompute it from the stored roles/nicknames rather than
+// persisting the transient Map that onStartGame only used once.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs) return;
+  if (gs.phase === "game-over") {
+    broadcastResults(room, io);
+    return;
+  }
+  const knowledge = computeKnowledge(gs.roles, gs.nicknames);
+  const k = knowledge.get(playerId);
+  if (k) {
+    io.to(playerId).emit("game:avalon-role", {
+      role: k.role,
+      team: k.team,
+      evilPlayers: k.evilPlayers,
+      percivalPair: k.percivalPair,
+    });
+  }
+  broadcastState(room, io);
+}
+
+module.exports = {
+  meta,
+  getRoleTable,
+  assignRoles,
+  computeKnowledge,
+  tallyTeamVote,
+  resolveQuest,
+  nextLeaderIndex,
+  countQuestResults,
+  onStartGame,
+  onHostBeginQuests,
+  onProposeTeam,
+  onTeamVote,
+  onQuestVote,
+  onNextRound,
+  onAssassinGuess,
+  onPlayerLeft,
+  onPlayerRejoined,
+};

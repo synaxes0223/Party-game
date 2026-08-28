@@ -15,7 +15,7 @@ function makeRoom(nicknames) {
   nicknames.forEach((name, i) => players.set(`p${i + 1}`, { id: `p${i + 1}`, nickname: name, ready: false }));
   return {
     code: "TEST",
-    hostSocketId: "host1",
+    hostId: "host1",
     state: "lobby",
     players,
     gameId: "word-wolf",
@@ -192,6 +192,53 @@ test("a second round picks an auto pair not used in round 1 (until the pool is e
   // "probably" different.
   assert.equal(room.gameState.usedPairIndexes.size, 2);
   assert.notEqual(room.gameState.wordPair.normal.word, firstNormalWord);
+});
+
+test("a disconnected player is excluded from vote quorum, letting the round resolve without their input", () => {
+  const room = makeRoom(["A", "B", "C", "D"]);
+  const { io } = makeStubIo();
+  game.onSelectCustomPair(room, io, { normalWord: "Coffee", imposterWord: "Tea" });
+
+  // p4 drops mid-game but keeps their seat in room.players (durable-session
+  // reconnect model) -- only their connected flag flips.
+  room.players.get("p4").connected = false;
+  game.onHostReveal(room, io);
+
+  game.onVote(room, io, "p1", "skip");
+  game.onVote(room, io, "p2", "skip");
+  assert.equal(room.gameState.phase, "voting");
+
+  // Without the fix, votes.size (3) never reaches the inflated
+  // activeIds.length (4, since p4 is still counted), so the round would stay
+  // stuck in "voting" forever.
+  game.onVote(room, io, "p3", "skip");
+  assert.equal(room.gameState.phase, "round-results");
+});
+
+test("a stale vote from a player who has since disconnected does not let the round resolve before every remaining connected player has voted", () => {
+  const room = makeRoom(["A", "B", "C", "D"]);
+  const { io } = makeStubIo();
+  game.onSelectCustomPair(room, io, { normalWord: "Coffee", imposterWord: "Tea" });
+  game.onHostReveal(room, io);
+
+  // p1 votes while still connected...
+  game.onVote(room, io, "p1", "skip");
+  // ...then disconnects, but keeps their seat in room.players (durable-
+  // session reconnect model) -- their already-cast vote stays in gs.votes.
+  room.players.get("p1").connected = false;
+
+  game.onVote(room, io, "p2", "skip");
+  game.onVote(room, io, "p3", "skip");
+
+  // votes.size is now 3 (p1's stale vote + p2 + p3), which matches the
+  // naive connected-player count (p2, p3, p4) -- but p4, who is still
+  // connected, never voted. A size-only quorum check would incorrectly
+  // resolve here; the round must instead keep waiting for p4.
+  assert.equal(room.gameState.phase, "voting");
+  assert.equal(room.gameState.votes.size, 3);
+
+  game.onVote(room, io, "p4", "skip");
+  assert.equal(room.gameState.phase, "round-results");
 });
 
 test("onPlayerLeft removes a pending vote and lets the round resolve with one fewer voter", () => {

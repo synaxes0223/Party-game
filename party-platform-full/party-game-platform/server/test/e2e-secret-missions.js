@@ -1,8 +1,8 @@
 // test/e2e-secret-missions.js
 // Live integration check: runs the real server in-process and drives a full
 // Secret Mission Bingo night through socket.io-client (no mocks), including
-// the reconnect path (disconnect + rejoin by nickname) that this game
-// requires. Run with: node test/e2e-secret-missions.js
+// the reconnect path (disconnect + rejoin with the same session token) that
+// this game leans on. Run with: node test/e2e-secret-missions.js
 
 const path = require("node:path");
 const { io } = require("socket.io-client");
@@ -21,25 +21,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-sm-token-${String(tokenCounter++).padStart(4, "0")}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -80,7 +87,7 @@ async function scenario1_startClaimAccuseAndReveal() {
   const accusationPromise = once(host, "game:accusation-result");
   players[1].socket.emit("player:accuse", {
     code: roomCode,
-    targetPlayerId: players[2].socket.id,
+    targetPlayerId: players[2].token,
     missionId: bobMissions.missions[0].id,
   });
   const missResult = await accusationPromise;
@@ -90,7 +97,7 @@ async function scenario1_startClaimAccuseAndReveal() {
   const hitPromise = once(host, "game:accusation-result");
   players[1].socket.emit("player:accuse", {
     code: roomCode,
-    targetPlayerId: players[2].socket.id,
+    targetPlayerId: players[2].token,
     missionId: carolMissions.missions[0].id,
   });
   const hitResult = await hitPromise;
@@ -108,9 +115,10 @@ async function scenario1_startClaimAccuseAndReveal() {
 }
 
 async function scenario2_disconnectAndRejoinSurvivesState() {
-  console.log("\n[Scenario 2] A player's phone locks (disconnect) then reconnects by nickname -- state survives");
+  console.log("\n[Scenario 2] A player's phone locks (disconnect) then reconnects on the same token -- state survives");
   const { host, roomCode } = await createRoom();
   const players = await joinPlayers(roomCode, ["Dave", "Eve", "Frank"]);
+  const daveToken = players[0].token;
   await selectGame(host, roomCode);
 
   const yourMissionsPromises = players.map((p) => once(p.socket, "game:your-missions"));
@@ -131,25 +139,25 @@ async function scenario2_disconnectAndRejoinSurvivesState() {
   const daveEntry = roomUpdated.room.players.find((p) => p.nickname === "Dave");
   assertTrue(daveEntry.connected === false, "expected Dave to show as disconnected, not removed");
 
-  // Dave rejoins with the same nickname on a new socket
+  // Dave rejoins on a new socket carrying the same session token
   const newDaveSocket = await connect();
   const yourMissionsAfterRejoinPromise = once(newDaveSocket, "game:your-missions");
   await new Promise((resolve, reject) => {
-    newDaveSocket.once("player:joined", () => resolve());
+    newDaveSocket.once("player:rejoined", () => resolve());
     newDaveSocket.once("player:join-error", (d) => reject(new Error(d.error)));
-    newDaveSocket.emit("player:join-room", { code: roomCode, nickname: "dave" }); // case-insensitive
+    newDaveSocket.emit("player:join-room", { code: roomCode, nickname: "ignored-on-rejoin", token: daveToken });
   });
   const missionsAfterRejoin = await yourMissionsAfterRejoinPromise;
   assertTrue(missionsAfterRejoin.missions.length === 3, "expected Dave's 3 missions to still be his after reconnect");
   const stillClaimed = missionsAfterRejoin.missions.find((m) => m.id === daveMissions.missions[0].id);
   assertTrue(stillClaimed.status === "claimed", "expected Dave's claimed mission to survive the reconnect");
 
-  // A random unrecognized nickname must still be rejected mid-game
+  // An unknown session token must still be rejected mid-game
   const strangerSocket = await connect();
   const rejectPromise = new Promise((resolve) => strangerSocket.once("player:join-error", resolve));
-  strangerSocket.emit("player:join-room", { code: roomCode, nickname: "TotallyNewPerson" });
+  strangerSocket.emit("player:join-room", { code: roomCode, nickname: "TotallyNewPerson", token: nextToken() });
   const rejectResult = await rejectPromise;
-  assertTrue(!!rejectResult.error, "expected an unrecognized nickname to still be rejected mid-game");
+  assertTrue(!!rejectResult.error, "expected an unknown token to still be rejected mid-game");
 
   console.log("  PASS");
 

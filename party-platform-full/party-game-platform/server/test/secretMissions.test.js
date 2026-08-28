@@ -13,7 +13,7 @@ function makeStubIo() {
 function makeRoom(nicknames) {
   const players = new Map();
   nicknames.forEach((name, i) => players.set(`p${i + 1}`, { id: `p${i + 1}`, nickname: name, ready: false }));
-  return { code: "TEST", hostSocketId: "host1", state: "lobby", players, gameId: "secret-missions", gameState: null };
+  return { code: "TEST", hostId: "host1", state: "lobby", players, gameId: "secret-missions", gameState: null };
 }
 
 function setup(nicknames) {
@@ -157,39 +157,13 @@ test("onEndGame reveals the full de-anonymized board and reports winners", () =>
   assert.ok(Array.isArray(resultsEvent.payload.winners) && resultsEvent.payload.winners.length >= 1);
 });
 
-test("onPlayerReconnected re-keys mission ownership, score, and accusation budget onto the new socketId", () => {
-  const room = setup(["A", "B", "C"]);
-  const { io } = makeStubIo();
-  game.onStartMissions(room, io);
-  const gs = room.gameState;
-  const myMission = gs.missions.find((m) => m.ownerId === "p1");
-  game.onClaimMission(room, io, "p1", myMission.id);
-  game.onAccuse(room, io, "p1", "p3", gs.missions.find((m) => m.ownerId === "p2").id);
-
-  room.players.delete("p1");
-  room.players.set("p1-new", { id: "p1-new", nickname: "A", ready: false, connected: true });
-
-  const { io: io2, emitted } = makeStubIo();
-  game.onPlayerReconnected(room, io2, "p1", "p1-new");
-
-  assert.equal(gs.missions.filter((m) => m.ownerId === "p1-new").length, 3);
-  assert.equal(gs.missions.filter((m) => m.ownerId === "p1").length, 0);
-  assert.ok(gs.scores.has("p1-new"));
-  assert.ok(!gs.scores.has("p1"));
-  assert.ok(gs.accusationsLeft.has("p1-new"));
-  assert.ok(!gs.accusationsLeft.has("p1"));
-
-  const yourMissionsEvent = emitted.find((e) => e.event === "game:your-missions" && e.id === "p1-new");
-  assert.equal(yourMissionsEvent.payload.missions.length, 3);
-});
-
-test("onPlayerSync re-sends private missions and the public board", () => {
+test("onPlayerRejoined re-sends private missions and the public board", () => {
   const room = setup(["A", "B", "C"]);
   const { io } = makeStubIo();
   game.onStartMissions(room, io);
 
   const { io: io2, emitted } = makeStubIo();
-  game.onPlayerSync(room, io2, "p1");
+  game.onPlayerRejoined(room, io2, "p1");
   assert.ok(emitted.some((e) => e.event === "game:your-missions" && e.id === "p1"));
   assert.ok(emitted.some((e) => e.event === "game:mission-board" && e.id === "p1"));
 });

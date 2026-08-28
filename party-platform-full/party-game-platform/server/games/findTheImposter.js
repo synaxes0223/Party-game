@@ -41,7 +41,11 @@ function getUploadedFiles() {
 
 function getActivePlayerIds(room) {
   const eliminated = room.gameState ? room.gameState.eliminated : new Set();
-  return Array.from(room.players.keys()).filter((id) => !eliminated.has(id));
+  return Array.from(room.players.keys()).filter((id) => {
+    if (eliminated.has(id)) return false;
+    const player = room.players.get(id);
+    return !player || player.connected !== false;
+  });
 }
 
 function getTrackForPlayer(gs, pid) {
@@ -91,7 +95,7 @@ function startRound(room, io, songPair) {
     io.to(pid).emit("game:load-audio", { gameId: meta.id, ...track });
   }
 
-  io.to(room.hostSocketId).emit("game:started", {
+  io.to(room.hostId).emit("game:started", {
     round: gs.round,
     playerCount: activeIds.length,
   });
@@ -134,13 +138,13 @@ function onPlayerReady(room, io, socketId) {
   gs.readyToPlay.add(socketId);
 
   const activeIds = getActivePlayerIds(room);
-  io.to(room.hostSocketId).emit("game:ready-progress", {
+  io.to(room.hostId).emit("game:ready-progress", {
     ready: gs.readyToPlay.size,
     total: activeIds.length,
   });
 
-  if (gs.readyToPlay.size >= activeIds.length) {
-    io.to(room.hostSocketId).emit("game:all-ready");
+  if (activeIds.every((id) => gs.readyToPlay.has(id))) {
+    io.to(room.hostId).emit("game:all-ready");
   }
   return {};
 }
@@ -164,7 +168,7 @@ function onHostPlay(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "loading") return { error: "Not ready to play." };
   const activeIds = getActivePlayerIds(room);
-  if (gs.readyToPlay.size < activeIds.length) return { error: "Not all players are ready yet." };
+  if (!activeIds.every((id) => gs.readyToPlay.has(id))) return { error: "Not all players are ready yet." };
 
   const startAt = Date.now() + SYNC_BUFFER_MS;
   gs.phase = "playing";
@@ -228,12 +232,12 @@ function onVote(room, io, socketId, votedForId) {
   gs.phase = "voting";
   gs.votes.set(socketId, votedForId);
 
-  io.to(room.hostSocketId).emit("game:vote-progress", {
+  io.to(room.hostId).emit("game:vote-progress", {
     voted: gs.votes.size,
     total: activeIds.length,
   });
 
-  if (gs.votes.size >= activeIds.length) {
+  if (activeIds.every((id) => gs.votes.has(id))) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
@@ -292,7 +296,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "round-results") return { error: "No round result to advance from." };
   gs.phase = "track-select";
-  io.to(room.hostSocketId).emit("game:track-pairs", { pairs: getTrackPairs() });
+  io.to(room.hostId).emit("game:track-pairs", { pairs: getTrackPairs() });
   return {};
 }
 
@@ -322,12 +326,31 @@ function onPlayerLeft(room, io, socketId) {
     return {};
   }
 
-  if (gs.phase === "loading" && gs.readyToPlay.size >= activeIds.length) {
-    io.to(room.hostSocketId).emit("game:all-ready");
-  } else if ((gs.phase === "playing" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
+  if (gs.phase === "loading" && activeIds.every((id) => gs.readyToPlay.has(id))) {
+    io.to(room.hostId).emit("game:all-ready");
+  } else if (
+    (gs.phase === "playing" || gs.phase === "voting") &&
+    activeIds.every((id) => gs.votes.has(id))
+  ) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
+}
+
+// A reconnecting player lost their audio track assignment. Per the plan's
+// stated limitation, this does not resynchronise playback position -- the
+// player rejoins ready for the next game:play-at.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs) return;
+  if (gs.phase === "game-over") {
+    revealFinalResults(room, io, gs.winner);
+    return;
+  }
+  if (gs.phase === "round-results" || gs.phase === "track-select") return;
+  const track = getTrackForPlayer(gs, playerId);
+  if (!track) return;
+  io.to(playerId).emit("game:load-audio", { gameId: meta.id, ...track });
 }
 
 module.exports = {
@@ -345,4 +368,5 @@ module.exports = {
   onVote,
   onNextRound,
   onPlayerLeft,
+  onPlayerRejoined,
 };

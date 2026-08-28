@@ -23,7 +23,11 @@ const meta = {
 
 function getActivePlayerIds(room) {
   const eliminated = room.gameState ? room.gameState.eliminated : new Set();
-  return Array.from(room.players.keys()).filter((id) => !eliminated.has(id));
+  return Array.from(room.players.keys()).filter((id) => {
+    if (eliminated.has(id)) return false;
+    const player = room.players.get(id);
+    return !player || player.connected !== false;
+  });
 }
 
 function getWordForPlayer(gs, pid) {
@@ -67,7 +71,7 @@ function startRound(room, io, wordPair) {
   room.state = "in-progress";
 
   const activeIds = getActivePlayerIds(room);
-  io.to(room.hostSocketId).emit("game:started", {
+  io.to(room.hostId).emit("game:started", {
     round: gs.round,
     playerCount: activeIds.length,
   });
@@ -129,12 +133,12 @@ function onVote(room, io, socketId, votedForId) {
   gs.phase = "voting";
   gs.votes.set(socketId, votedForId);
 
-  io.to(room.hostSocketId).emit("game:vote-progress", {
+  io.to(room.hostId).emit("game:vote-progress", {
     voted: gs.votes.size,
     total: activeIds.length,
   });
 
-  if (gs.votes.size >= activeIds.length) {
+  if (activeIds.every((id) => gs.votes.has(id))) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
@@ -195,7 +199,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "round-results") return { error: "No round result to advance from." };
   gs.phase = "word-select";
-  io.to(room.hostSocketId).emit("game:word-select-ready", {});
+  io.to(room.hostId).emit("game:word-select-ready", {});
   return {};
 }
 
@@ -222,10 +226,27 @@ function onPlayerLeft(room, io, socketId) {
     return {};
   }
 
-  if ((gs.phase === "revealed" || gs.phase === "voting") && gs.votes.size >= activeIds.length) {
+  if (
+    (gs.phase === "revealed" || gs.phase === "voting") &&
+    activeIds.every((id) => gs.votes.has(id))
+  ) {
     resolveRoundAndAdvance(room, io);
   }
   return {};
+}
+
+// A reconnecting player lost the private word we sent to their old socket.
+// Only re-send if the word has actually been revealed this round -- before
+// that, nothing was sent yet, and the normal reveal broadcast will cover them.
+function onPlayerRejoined(room, io, playerId) {
+  const gs = room.gameState;
+  if (!gs) return;
+  if (gs.phase === "game-over") {
+    revealFinalResults(room, io, gs.winner);
+    return;
+  }
+  if (gs.phase !== "revealed" && gs.phase !== "voting") return;
+  io.to(playerId).emit("game:reveal-word", { gameId: meta.id, word: getWordForPlayer(gs, playerId) });
 }
 
 module.exports = {
@@ -236,4 +257,5 @@ module.exports = {
   onVote,
   onNextRound,
   onPlayerLeft,
+  onPlayerRejoined,
 };

@@ -152,7 +152,7 @@ function onPromptSubmitted(room, io, socketId, text) {
   const insertAt = Math.floor(Math.random() * (gs.promptState.queue.length + 1));
   gs.promptState.queue.splice(insertAt, 0, entry);
 
-  io.to(room.hostSocketId).emit("game:submission-count", { count: gs.promptState.queue.length });
+  io.to(room.hostId).emit("game:submission-count", { count: gs.promptState.queue.length });
   return {};
 }
 
@@ -193,7 +193,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "boom") return { error: "No boom result to advance from." };
   gs.phase = "category-select";
-  io.to(room.hostSocketId).emit("game:prompt-select-ready", {});
+  io.to(room.hostId).emit("game:prompt-select-ready", {});
   return {};
 }
 

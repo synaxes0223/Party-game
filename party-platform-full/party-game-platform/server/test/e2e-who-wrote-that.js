@@ -20,25 +20,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-wwt-token-${String(tokenCounter++).padStart(4, "0")}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -68,9 +75,9 @@ async function playFullAnswerReveal(host, roomCode, players) {
   const authorName = players[0].name; // shuffled order unknown, but voting works regardless of identity
   void authorName;
   const [a, b, c] = players;
-  a.socket.emit("player:vote-author", { code: roomCode, votedForId: b.socket.id });
-  b.socket.emit("player:vote-author", { code: roomCode, votedForId: c.socket.id });
-  c.socket.emit("player:vote-author", { code: roomCode, votedForId: a.socket.id });
+  a.socket.emit("player:vote-author", { code: roomCode, votedForId: b.token });
+  b.socket.emit("player:vote-author", { code: roomCode, votedForId: c.token });
+  c.socket.emit("player:vote-author", { code: roomCode, votedForId: a.token });
   await revealPromise;
 }
 
@@ -113,9 +120,9 @@ async function scenario2_fullRoundAndScoring() {
   for (let i = 0; i < 3; i++) {
     const revealPromise = once(host, "game:answer-reveal");
     const showAnswerOrDonePromise = i < 2 ? once(host, "game:show-answer") : Promise.resolve(null);
-    players[0].socket.emit("player:vote-author", { code: roomCode, votedForId: players[1].socket.id });
-    players[1].socket.emit("player:vote-author", { code: roomCode, votedForId: players[2].socket.id });
-    players[2].socket.emit("player:vote-author", { code: roomCode, votedForId: players[0].socket.id });
+    players[0].socket.emit("player:vote-author", { code: roomCode, votedForId: players[1].token });
+    players[1].socket.emit("player:vote-author", { code: roomCode, votedForId: players[2].token });
+    players[2].socket.emit("player:vote-author", { code: roomCode, votedForId: players[0].token });
     await revealPromise;
     host.emit("host:next-answer", { code: roomCode });
     await showAnswerOrDonePromise;
@@ -154,7 +161,7 @@ async function scenario3_selfVoteRejectedAndForceAnswers() {
   await showAnswerPromise;
 
   const rejectedPromise = once(players[0].socket, "player:vote-rejected");
-  players[0].socket.emit("player:vote-author", { code: roomCode, votedForId: players[0].socket.id });
+  players[0].socket.emit("player:vote-author", { code: roomCode, votedForId: players[0].token });
   await rejectedPromise;
   console.log("  PASS");
 

@@ -2,6 +2,8 @@
 // Core platform service: room creation, joining, and player tracking.
 // This is game-agnostic — any game module plugs into a room's `game` slot.
 
+const wheelLogic = require("./games/wheelLogic");
+
 const rooms = new Map(); // roomCode -> room object
 
 function generateRoomCode() {
@@ -14,15 +16,18 @@ function generateRoomCode() {
   return code;
 }
 
-function createRoom(hostSocketId) {
+function createRoom(hostId) {
   const code = generateRoomCode();
   const room = {
     code,
-    hostSocketId,
+    hostId,                 // the host's session token, stable across reconnects
+    hostConnected: true,
+    hostDisconnectedAt: null,
     state: "lobby", // lobby -> in-progress -> results
-    players: new Map(), // socketId -> { id, nickname, ready }
+    players: new Map(), // playerToken -> { id, nickname, ready, connected, disconnectedAt }
     gameId: null,       // which game is selected, e.g. "find-the-imposter"
     gameState: null,    // opaque state owned by the game module
+    punishmentWheel: { items: wheelLogic.makeDefaultItems() },
     createdAt: Date.now(),
   };
   rooms.set(code, room);
@@ -33,91 +38,83 @@ function getRoom(code) {
   return rooms.get((code || "").toUpperCase());
 }
 
-// `allowReconnect` is passed by index.js (which alone knows the selected
-// game's meta) -- roomService stays game-agnostic and never imports the
-// game registry. When true and the room is mid-game, a nickname match
-// against a `connected: false` player record reclaims that record onto the
-// new socketId instead of rejecting the join; an unrecognized nickname is
-// still rejected exactly as before.
-function joinRoom(code, socketId, nickname, { allowReconnect = false } = {}) {
+function joinRoom(code, playerToken, nickname) {
   const room = getRoom(code);
   if (!room) return { error: "Room not found" };
 
+  // A known token is a returning player: reclaim the seat whatever the room
+  // state, because refusing here is what used to lose someone their game.
+  const existing = room.players.get(playerToken);
+  if (existing) {
+    existing.connected = true;
+    existing.disconnectedAt = null;
+    return { room, rejoined: true };
+  }
+
+  if (room.state !== "lobby") return { error: "Game already in progress" };
+
   const trimmed = (nickname || "").trim().slice(0, 20);
   if (!trimmed) return { error: "Nickname required" };
-
-  if (room.state !== "lobby") {
-    if (!allowReconnect) return { error: "Game already in progress" };
-
-    const existingEntry = Array.from(room.players.entries()).find(
-      ([, p]) => p.connected === false && p.nickname.toLowerCase() === trimmed.toLowerCase()
-    );
-    if (!existingEntry) return { error: "Game already in progress" };
-
-    const [oldSocketId, player] = existingEntry;
-    room.players.delete(oldSocketId);
-    player.id = socketId;
-    player.connected = true;
-    room.players.set(socketId, player);
-    return { room, reclaimed: true, oldSocketId };
-  }
 
   const nameTaken = Array.from(room.players.values()).some(
     (p) => p.nickname.toLowerCase() === trimmed.toLowerCase()
   );
   if (nameTaken) return { error: "Nickname already taken in this room" };
 
-  room.players.set(socketId, { id: socketId, nickname: trimmed, ready: false, connected: true });
-  return { room };
+  room.players.set(playerToken, {
+    id: playerToken,
+    nickname: trimmed,
+    ready: false,
+    connected: true,
+    disconnectedAt: null,
+  });
+  return { room, rejoined: false };
 }
 
-function removePlayer(socketId) {
+// In the lobby a departure is just a departure. Once a game is running the
+// seat is load-bearing — game state is indexed by player id — so the player
+// is kept and merely flagged, ready to be reclaimed by the same token.
+function markPlayerDisconnected(playerToken) {
   for (const room of rooms.values()) {
-    if (room.players.has(socketId)) {
-      room.players.delete(socketId);
-      return room;
+    const player = room.players.get(playerToken);
+    if (!player) continue;
+
+    if (room.state === "lobby") {
+      room.players.delete(playerToken);
+      return { room, removed: true };
+    }
+
+    player.connected = false;
+    player.disconnectedAt = Date.now();
+    return { room, removed: false };
+  }
+  return null;
+}
+
+// Nobody is removed on disconnect any more, so rooms have to be reclaimed on a
+// timer instead of when the last player leaves.
+function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000) {
+  const deleted = [];
+  for (const room of rooms.values()) {
+    const players = Array.from(room.players.values());
+    const anyoneConnected = room.hostConnected || players.some((p) => p.connected);
+    if (anyoneConnected) continue;
+
+    const timestamps = [room.createdAt, room.hostDisconnectedAt || 0];
+    players.forEach((p) => timestamps.push(p.disconnectedAt || 0));
+    const lastSeen = Math.max(...timestamps);
+
+    if (now - lastSeen >= graceMs) {
+      rooms.delete(room.code);
+      deleted.push(room.code);
     }
   }
-  return null;
+  return deleted;
 }
 
-function findRoomByPlayer(socketId) {
+function findRoomByHost(hostId) {
   for (const room of rooms.values()) {
-    if (room.players.has(socketId)) return room;
-  }
-  return null;
-}
-
-// Soft-disconnect for reconnect-capable games: keeps the player record (and
-// the game's own per-player state, which is keyed off it) intact, just flags
-// it unreachable. Does NOT touch room.players.size, so removeRoomIfEmpty
-// never fires off this path -- that's deliberate, matching the "only clean
-// up when the host is gone too" rule (the host disconnecting still deletes
-// the room unconditionally, elsewhere).
-function markDisconnected(socketId) {
-  const room = findRoomByPlayer(socketId);
-  if (!room) return null;
-  const player = room.players.get(socketId);
-  if (player) player.connected = false;
-  return room;
-}
-
-function removeRoomIfEmpty(code) {
-  const room = getRoom(code);
-  if (room && room.players.size === 0) {
-    rooms.delete(code);
-    return true;
-  }
-  return false;
-}
-
-function deleteRoom(code) {
-  rooms.delete((code || "").toUpperCase());
-}
-
-function findRoomByHost(hostSocketId) {
-  for (const room of rooms.values()) {
-    if (room.hostSocketId === hostSocketId) return room;
+    if (room.hostId === hostId) return room;
   }
   return null;
 }
@@ -131,20 +128,37 @@ function publicRoomView(room) {
       id: p.id,
       nickname: p.nickname,
       ready: p.ready,
-      connected: p.connected !== false,
+      connected: p.connected,
     })),
   };
+}
+
+// The host disconnecting used to delete the room outright, which on the
+// Android deployment meant backgrounding the browser tab destroyed the game.
+function markHostDisconnected(hostId) {
+  const room = findRoomByHost(hostId);
+  if (!room) return null;
+  room.hostConnected = false;
+  room.hostDisconnectedAt = Date.now();
+  return room;
+}
+
+function reclaimHost(code, hostId) {
+  const room = getRoom(code);
+  if (!room || room.hostId !== hostId) return null;
+  room.hostConnected = true;
+  room.hostDisconnectedAt = null;
+  return room;
 }
 
 module.exports = {
   createRoom,
   getRoom,
   joinRoom,
-  removePlayer,
-  findRoomByPlayer,
-  markDisconnected,
-  removeRoomIfEmpty,
-  deleteRoom,
+  markPlayerDisconnected,
+  sweepAbandonedRooms,
   findRoomByHost,
   publicRoomView,
+  markHostDisconnected,
+  reclaimHost,
 };

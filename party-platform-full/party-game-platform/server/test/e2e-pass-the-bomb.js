@@ -21,25 +21,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-ptb-token-${String(tokenCounter++).padStart(4, "0")}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -65,11 +72,11 @@ async function scenario1_passThenExplode() {
   const started = await startedPromise;
   assertTrue(started.ring.length === 4, "expected all 4 players in the ring");
 
-  const byId = Object.fromEntries(players.map((p) => [p.socket.id, p]));
+  const byId = Object.fromEntries(players.map((p) => [p.token, p]));
   let holderId = started.holderId;
 
   // Pass twice, verifying only the true holder's pass is honored
-  const notHolder = players.find((p) => p.socket.id !== holderId);
+  const notHolder = players.find((p) => p.token !== holderId);
   notHolder.socket.emit("player:pass-bomb", { code: roomCode });
   await new Promise((r) => setTimeout(r, 50)); // give the (ignored) event a moment to be processed
 
@@ -119,9 +126,11 @@ async function scenario2_nextRoundAndEndGame() {
   players.forEach((p) => p.socket.close());
 }
 
-async function scenario3_disconnectingHolderAutoPasses() {
-  console.log("\n[Scenario 3] Disconnecting holder auto-passes the bomb before the fuse expires");
-  process.env.BOMB_FUSE_MS_RANGE = "5000,5000"; // long enough for the disconnect to land first
+async function scenario3_disconnectingHolderStillTakesTheBoom() {
+  console.log("\n[Scenario 3] A holder who drops mid-fuse keeps the bomb (token seats survive blips) and takes the boom");
+  // With token-based sessions a disconnect no longer notifies the game -- a
+  // brief phone-lock must not reshuffle the ring. The fuse keeps running, so
+  // a holder who genuinely left simply takes the explosion when it expires.
   const { host, roomCode } = await createRoom();
   const players = await joinPlayers(roomCode, ["Hana", "Ivo", "Jaz"]);
   await selectGame(host, roomCode);
@@ -130,14 +139,13 @@ async function scenario3_disconnectingHolderAutoPasses() {
   host.emit("host:custom-prompt", { code: roomCode, text: "LRT stations" });
   const started = await startedPromise;
 
-  const holder = players.find((p) => p.socket.id === started.holderId);
-  const passedPromise = once(host, "game:bomb-passed");
+  const holder = players.find((p) => p.token === started.holderId);
+  const explodedPromise = once(host, "game:bomb-exploded");
   holder.socket.close();
-  const passed = await passedPromise;
-  assertTrue(passed.holderId !== started.holderId, "expected the bomb to auto-pass off the disconnected holder");
+  const exploded = await explodedPromise;
+  assertTrue(exploded.holderId === started.holderId, "expected the explosion to hit the holder who dropped");
   console.log("  PASS");
 
-  process.env.BOMB_FUSE_MS_RANGE = "300,600";
   host.close();
   players.filter((p) => p !== holder).forEach((p) => p.socket.close());
 }
@@ -152,7 +160,7 @@ async function main() {
   try {
     await scenario1_passThenExplode();
     await scenario2_nextRoundAndEndGame();
-    await scenario3_disconnectingHolderAutoPasses();
+    await scenario3_disconnectingHolderStillTakesTheBoom();
 
     console.log("\nALL PASS THE BOMB E2E SCENARIOS PASSED");
     process.exit(0);

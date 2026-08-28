@@ -3,7 +3,6 @@
 // Serves host/player web pages and coordinates rooms via Socket.io.
 
 const path = require("path");
-const os = require("os");
 const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
@@ -16,6 +15,9 @@ const gameRegistry = require("./games/registry");
 const uploadStore = require("./games/uploadStore");
 const promptLogic = require("./games/promptLogic");
 const aiPromptService = require("./games/aiPromptService");
+const wheelLogic = require("./games/wheelLogic");
+const lanInfo = require("./lanInfo");
+const { isValidToken } = require("./sessionToken");
 
 const app = express();
 const server = http.createServer(app);
@@ -30,8 +32,22 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/audio", express.static(path.join(__dirname, "audio")));
 app.use("/uploads", express.static(UPLOADS_DIR));
 
+// Players reach this server by reading an address off the host's screen, and
+// the obvious thing to type is the bare host:port. Without this they land on
+// a 404 at exactly the moment the party is waiting on them.
+app.get("/", (req, res) => res.redirect("/player/"));
+
 app.get("/api/games", (req, res) => {
   res.json(gameRegistry.listGames());
+});
+
+// The host screen is usually opened on the host's own device as
+// http://localhost:3000/host/, so the page itself cannot derive a join URL
+// players could actually reach. The server knows its LAN addresses; it hands
+// them over here, along with a pre-rendered QR code for the primary one.
+app.get("/api/join-info", (req, res) => {
+  const info = lanInfo.buildJoinInfo(lanInfo.getLanAddresses(), PORT);
+  res.json({ ...info, qrSvg: lanInfo.buildQrSvg(info.primaryJoinUrl) });
 });
 
 const uploadStorage = multer.diskStorage({
@@ -67,16 +83,13 @@ app.post("/api/upload-audio", (req, res) => {
 });
 
 function printLanUrl() {
-  const nets = os.networkInterfaces();
-  const addrs = [];
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === "IPv4" && !net.internal) addrs.push(net.address);
-    }
-  }
+  const { joinUrls } = lanInfo.buildJoinInfo(lanInfo.getLanAddresses(), PORT);
   console.log(`\nServer running on port ${PORT}`);
-  console.log(`Local:  http://localhost:${PORT}`);
-  addrs.forEach((a) => console.log(`Network: http://${a}:${PORT}  <-- use this on phones (same WiFi)`));
+  console.log(`Host:    http://localhost:${PORT}/host/`);
+  joinUrls.forEach((u, i) => console.log(`Players: ${u}${i === 0 ? "  <-- try this one first" : ""}`));
+  if (joinUrls.length === 0) {
+    console.log("No LAN address found - turn WiFi or the hotspot on, then restart.");
+  }
   console.log("");
 }
 
@@ -85,7 +98,7 @@ function printLanUrl() {
 // off to `handler`.
 function withHostGame(socket, code, handler) {
   const room = roomService.getRoom(code);
-  if (!room || room.hostSocketId !== socket.id) return;
+  if (!room || room.hostId !== socket.data.token) return;
   const game = gameRegistry.getGame(room.gameId);
   if (!game) return;
   const result = handler(room, game);
@@ -93,31 +106,74 @@ function withHostGame(socket, code, handler) {
 }
 
 io.on("connection", (socket) => {
+  // Identity is the client's persistent token, not socket.id. Joining a room
+  // named after it means every existing io.to(playerId) emit keeps working
+  // across reconnects without the game modules changing.
+  function bindIdentity(token) {
+    if (!isValidToken(token)) return false;
+    socket.data.token = token;
+    socket.join(token);
+    return true;
+  }
+
   // ---- HOST: create room ----
-  socket.on("host:create-room", () => {
-    const room = roomService.createRoom(socket.id);
+  socket.on("host:create-room", ({ token } = {}) => {
+    if (!bindIdentity(token)) {
+      socket.emit("host:error", { error: "Missing or malformed session token" });
+      return;
+    }
+    const room = roomService.createRoom(token);
     socket.join(room.code);
     socket.emit("host:room-created", {
       room: roomService.publicRoomView(room),
       games: gameRegistry.listGames(),
     });
+    socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
+  });
+
+  // ---- HOST: reclaim a room after reconnecting ----
+  socket.on("host:reclaim-room", ({ code, token } = {}) => {
+    if (!bindIdentity(token)) return;
+    const room = roomService.reclaimHost(code, token);
+    if (!room) {
+      socket.emit("host:reclaim-failed", { code });
+      return;
+    }
+    socket.join(room.code);
+    socket.emit("host:room-reclaimed", {
+      room: roomService.publicRoomView(room),
+      games: gameRegistry.listGames(),
+      gameId: room.gameId,
+    });
+    io.in(room.code).emit("room:host-reconnected", {});
   });
 
   // ---- PLAYER: join room ----
-  socket.on("player:join-room", ({ code, nickname }) => {
-    const existingRoom = roomService.getRoom(code);
-    const gameForReconnect = existingRoom && existingRoom.gameId ? gameRegistry.getGame(existingRoom.gameId) : null;
-    const allowReconnect = Boolean(gameForReconnect && gameForReconnect.meta.supportsReconnect);
-
-    const result = roomService.joinRoom(code, socket.id, nickname, { allowReconnect });
+  socket.on("player:join-room", ({ code, nickname, token } = {}) => {
+    if (!bindIdentity(token)) {
+      socket.emit("player:join-error", { error: "Missing or malformed session token" });
+      return;
+    }
+    const result = roomService.joinRoom(code, token, nickname);
     if (result.error) {
       socket.emit("player:join-error", { error: result.error });
       return;
     }
     const room = result.room;
     socket.join(room.code);
-    socket.emit("player:joined", { room: roomService.publicRoomView(room) });
-    io.to(room.hostSocketId).emit("host:room-updated", {
+    socket.emit(result.rejoined ? "player:rejoined" : "player:joined", {
+      room: roomService.publicRoomView(room),
+    });
+    socket.emit("wheel:list-updated", { items: room.punishmentWheel.items });
+
+    // A returning player has lost every private message the game sent them,
+    // so let the game module re-send whatever that player is entitled to see.
+    if (result.rejoined && room.gameId && room.gameState) {
+      const game = gameRegistry.getGame(room.gameId);
+      if (game && game.onPlayerRejoined) game.onPlayerRejoined(room, io, token);
+    }
+
+    io.to(room.hostId).emit("host:room-updated", {
       room: roomService.publicRoomView(room),
     });
     io.in(room.code).emit("room:player-list", {
@@ -133,16 +189,12 @@ io.on("connection", (socket) => {
       const currentGame = gameRegistry.getGame(room.gameId);
       if (currentGame) socket.emit("room:game-selected", { gameId: room.gameId, meta: currentGame.meta });
     }
-
-    if (result.reclaimed && gameForReconnect && gameForReconnect.onPlayerReconnected) {
-      gameForReconnect.onPlayerReconnected(room, io, result.oldSocketId, socket.id);
-    }
   });
 
   // ---- HOST: select a game ----
   socket.on("host:select-game", ({ code, gameId }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     const game = gameRegistry.getGame(gameId);
     if (!game) return;
 
@@ -153,6 +205,9 @@ io.on("connection", (socket) => {
     });
     if (game.getTrackPairs) {
       socket.emit("game:track-pairs", { pairs: game.getTrackPairs() });
+    }
+    if (game.getEntryPool) {
+      socket.emit("game:entry-pool", { entries: game.getEntryPool() });
     }
     if (game.meta.usesPromptPipeline) {
       if (game.initGameState) game.initGameState(room);
@@ -179,7 +234,7 @@ io.on("connection", (socket) => {
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.meta.usesPromptPipeline || !game.onPromptSubmitted) return;
-    const result = game.onPromptSubmitted(room, io, socket.id, text);
+    const result = game.onPromptSubmitted(room, io, socket.data.token, text);
     if (result && result.error) socket.emit("player:prompt-rejected", { error: result.error });
     else socket.emit("player:prompt-accepted", {});
   });
@@ -187,7 +242,7 @@ io.on("connection", (socket) => {
   // ---- HOST: AI prompt generation (topic -> batch -> host approves) ----
   socket.on("host:generate-prompts", async ({ code, topic, spice, count }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.meta.usesPromptPipeline) return;
 
@@ -203,7 +258,7 @@ io.on("connection", (socket) => {
 
   socket.on("host:approve-prompts", ({ code, prompts }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.meta.usesPromptPipeline || !room.gameState) return;
 
@@ -223,7 +278,7 @@ io.on("connection", (socket) => {
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.onSubmitAnswer) return;
-    const result = game.onSubmitAnswer(room, io, socket.id, text);
+    const result = game.onSubmitAnswer(room, io, socket.data.token, text);
     if (result && result.error) socket.emit("player:answer-rejected", { error: result.error });
   });
 
@@ -235,7 +290,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game && game.onVoteAuthor) game.onVoteAuthor(room, io, socket.id, votedForId);
+    if (game && game.onVoteAuthor) game.onVoteAuthor(room, io, socket.data.token, votedForId);
   });
 
   socket.on("host:next-answer", ({ code }) => {
@@ -247,7 +302,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game && game.onSubmitResponse) game.onSubmitResponse(room, io, socket.id, answer, prediction);
+    if (game && game.onSubmitResponse) game.onSubmitResponse(room, io, socket.data.token, answer, prediction);
   });
 
   // ---- Pass The Bomb: holder passes the bomb along ----
@@ -255,16 +310,7 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game && game.onPassBomb) game.onPassBomb(room, io, socket.id);
-  });
-
-  // ---- Reconnect-capable games: re-request current state after a
-  // tab-switch/lock-screen reconnect ----
-  socket.on("player:sync", ({ code }) => {
-    const room = roomService.getRoom(code);
-    if (!room || !room.gameId) return;
-    const game = gameRegistry.getGame(room.gameId);
-    if (game && game.onPlayerSync) game.onPlayerSync(room, io, socket.id);
+    if (game && game.onPassBomb) game.onPassBomb(room, io, socket.data.token);
   });
 
   // ---- Secret Mission Bingo: deal missions, claim, accuse ----
@@ -277,7 +323,7 @@ io.on("connection", (socket) => {
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.onClaimMission) return;
-    const result = game.onClaimMission(room, io, socket.id, missionId);
+    const result = game.onClaimMission(room, io, socket.data.token, missionId);
     if (result && result.error) socket.emit("player:mission-action-rejected", { error: result.error });
   });
 
@@ -286,12 +332,8 @@ io.on("connection", (socket) => {
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
     if (!game || !game.onAccuse) return;
-    const result = game.onAccuse(room, io, socket.id, targetPlayerId, missionId);
+    const result = game.onAccuse(room, io, socket.data.token, targetPlayerId, missionId);
     if (result && result.error) socket.emit("player:mission-action-rejected", { error: result.error });
-  });
-
-  socket.on("host:end-game", ({ code }) => {
-    withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
   });
 
   // ---- HOST: pick a track pair (also starts the round) ----
@@ -352,12 +394,69 @@ io.on("connection", (socket) => {
     withHostGame(socket, code, (room, game) => game.onNextRound(room, io));
   });
 
+  // ---- HOST: start a Slip-Up session ----
+  socket.on("host:start-game", ({ code, excludedIds, customEntries }) => {
+    withHostGame(socket, code, (room, game) => game.onStartGame(room, io, { excludedIds, customEntries }));
+  });
+
+  // ---- HOST: mark a player as caught (Slip-Up) ----
+  socket.on("host:mark-caught", ({ code, targetPlayerId }) => {
+    withHostGame(socket, code, (room, game) => game.onMarkCaught(room, io, { targetPlayerId }));
+  });
+
+  // ---- HOST: end a session (Slip-Up, and the prompt-pipeline games) ----
+  socket.on("host:end-game", ({ code }) => {
+    withHostGame(socket, code, (room, game) => (game.onEndGame ? game.onEndGame(room, io) : {}));
+  });
+
+  // ---- HOST: start an Avalon game (assigns roles) ----
+  socket.on("host:avalon-start", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onStartGame(room, io));
+  });
+
+  // ---- HOST: confirm everyone has seen their role, begin quests ----
+  socket.on("host:avalon-begin", ({ code }) => {
+    withHostGame(socket, code, (room, game) => game.onHostBeginQuests(room, io));
+  });
+
+  // ---- PLAYER: leader proposes a quest team ----
+  socket.on("player:avalon-propose-team", ({ code, teamPlayerIds }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onProposeTeam) game.onProposeTeam(room, io, socket.data.token, teamPlayerIds);
+  });
+
+  // ---- PLAYER: vote to approve/reject the proposed team ----
+  socket.on("player:avalon-team-vote", ({ code, approve }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onTeamVote) game.onTeamVote(room, io, socket.data.token, approve);
+  });
+
+  // ---- PLAYER: submit a secret quest pass/fail vote ----
+  socket.on("player:avalon-quest-vote", ({ code, success }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onQuestVote) game.onQuestVote(room, io, socket.data.token, success);
+  });
+
+  // ---- PLAYER: Assassin's final guess at Merlin's identity ----
+  socket.on("player:avalon-assassin-guess", ({ code, targetId }) => {
+    const room = roomService.getRoom(code);
+    if (!room || !room.gameId) return;
+    const game = gameRegistry.getGame(room.gameId);
+    if (game.onAssassinGuess) game.onAssassinGuess(room, io, socket.data.token, targetId);
+  });
+
   // ---- PLAYER: confirms audio preloaded ----
   socket.on("player:audio-ready", ({ code }) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onPlayerReady) game.onPlayerReady(room, io, socket.id);
+    if (game.onPlayerReady) game.onPlayerReady(room, io, socket.data.token);
   });
 
   // ---- PLAYER: casts vote ----
@@ -365,13 +464,13 @@ io.on("connection", (socket) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameId) return;
     const game = gameRegistry.getGame(room.gameId);
-    if (game.onVote) game.onVote(room, io, socket.id, votedForId);
+    if (game.onVote) game.onVote(room, io, socket.data.token, votedForId);
   });
 
   // ---- HOST: return to lobby / play again ----
   socket.on("host:reset-room", ({ code }) => {
     const room = roomService.getRoom(code);
-    if (!room || room.hostSocketId !== socket.id) return;
+    if (!room || room.hostId !== socket.data.token) return;
     if (room.gameId) {
       const game = gameRegistry.getGame(room.gameId);
       if (game && game.onReset) game.onReset(room);
@@ -385,46 +484,81 @@ io.on("connection", (socket) => {
     });
   });
 
+  // ---- WHEEL: add a punishment (host or any player; room-level, works
+  // regardless of which game, if any, is currently selected) ----
+  // Note: wheel:list-updated is intentionally broadcast to the whole room,
+  // not host-only. Players' UI has no list view (host.js/player.js keep the
+  // spin a soft surprise), but the underlying data reaching player sockets
+  // is accepted as low-stakes for a same-WiFi party game — don't "fix" this
+  // into a host-only emit without revisiting that call.
+  socket.on("wheel:add-punishment", ({ code, text }) => {
+    const room = roomService.getRoom(code);
+    if (!room) return;
+
+    let addedBy = "player";
+    let nickname;
+    if (socket.data.token === room.hostId) {
+      addedBy = "host";
+    } else {
+      const player = room.players.get(socket.data.token);
+      if (player) nickname = player.nickname;
+    }
+
+    const result = wheelLogic.addItem(room.punishmentWheel.items, { text, addedBy, nickname });
+    if (result.error) {
+      socket.emit("wheel:add-error", { error: result.error });
+      return;
+    }
+    room.punishmentWheel.items = result.items;
+    io.in(room.code).emit("wheel:list-updated", { items: room.punishmentWheel.items });
+  });
+
+  // ---- WHEEL: remove a punishment (host only) ----
+  socket.on("wheel:remove-punishment", ({ code, id }) => {
+    const room = roomService.getRoom(code);
+    if (!room || room.hostId !== socket.data.token) return;
+
+    const result = wheelLogic.removeItem(room.punishmentWheel.items, id);
+    room.punishmentWheel.items = result.items;
+    io.in(room.code).emit("wheel:list-updated", { items: room.punishmentWheel.items });
+  });
+
+  // ---- Blood on the Clocktower: self-contained socket wiring ----
+  gameRegistry.getGame("botc").attach(io, socket, { roomService });
+
   // ---- Disconnect handling ----
   socket.on("disconnect", () => {
-    const roomBeforeRemoval = roomService.findRoomByPlayer(socket.id);
-    const gameForDisconnect =
-      roomBeforeRemoval && roomBeforeRemoval.gameId ? gameRegistry.getGame(roomBeforeRemoval.gameId) : null;
-    const softDisconnect = Boolean(
-      gameForDisconnect && gameForDisconnect.meta.supportsReconnect && roomBeforeRemoval.gameState
-    );
+    const token = socket.data.token;
+    if (!token) return;
 
-    if (softDisconnect) {
-      const room = roomService.markDisconnected(socket.id);
-      io.to(room.hostSocketId).emit("host:room-updated", {
+    const result = roomService.markPlayerDisconnected(token);
+    if (result) {
+      const { room, removed } = result;
+      // Only tell the game someone left if the seat is actually gone. A
+      // mid-game drop keeps the seat, and telling the game otherwise is what
+      // used to destroy the position.
+      if (removed && room.gameId && room.gameState) {
+        const game = gameRegistry.getGame(room.gameId);
+        if (game && game.onPlayerLeft) game.onPlayerLeft(room, io, token);
+      }
+      io.to(room.hostId).emit("host:room-updated", {
         room: roomService.publicRoomView(room),
       });
       io.in(room.code).emit("room:player-list", {
         players: roomService.publicRoomView(room).players,
       });
-    } else {
-      const room = roomService.removePlayer(socket.id);
-      if (room) {
-        if (room.gameId && room.gameState) {
-          const game = gameRegistry.getGame(room.gameId);
-          if (game.onPlayerLeft) game.onPlayerLeft(room, io, socket.id);
-        }
-        io.to(room.hostSocketId).emit("host:room-updated", {
-          room: roomService.publicRoomView(room),
-        });
-        io.in(room.code).emit("room:player-list", {
-          players: roomService.publicRoomView(room).players,
-        });
-        roomService.removeRoomIfEmpty(room.code);
-      }
     }
 
-    const hostedRoom = roomService.findRoomByHost(socket.id);
+    const hostedRoom = roomService.markHostDisconnected(token);
     if (hostedRoom) {
-      io.in(hostedRoom.code).emit("room:host-disconnected");
-      roomService.deleteRoom(hostedRoom.code);
+      io.in(hostedRoom.code).emit("room:host-disconnected", {});
     }
   });
 });
+
+// Rooms are no longer emptied by disconnects, so reclaim abandoned ones on a
+// timer. Unref so the interval never keeps the process alive on its own.
+const ROOM_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => roomService.sweepAbandonedRooms(), ROOM_SWEEP_INTERVAL_MS).unref();
 
 server.listen(PORT, "0.0.0.0", printLanUrl);

@@ -13,7 +13,7 @@ function makeStubIo() {
 function makeRoom(nicknames) {
   const players = new Map();
   nicknames.forEach((name, i) => players.set(`p${i + 1}`, { id: `p${i + 1}`, nickname: name, ready: false }));
-  return { code: "TEST", hostSocketId: "host1", state: "lobby", players, gameId: "pass-the-bomb", gameState: null };
+  return { code: "TEST", hostId: "host1", state: "lobby", players, gameId: "pass-the-bomb", gameState: null };
 }
 
 function setup(nicknames) {

@@ -20,25 +20,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-word-wolf-token-${tokenCounter++}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -87,8 +94,8 @@ async function scenario1_autoPairAndSplitVote() {
   assertTrue(distinctWords.size === 2, "expected exactly one player to have a different word");
 
   const roundResultsPromise = once(host, "game:round-results");
-  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[1].socket.id });
-  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].socket.id });
+  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[1].token });
+  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].token });
   players[2].socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
   players[3].socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
   const roundResult = await roundResultsPromise;
@@ -116,13 +123,13 @@ async function scenario2_customPairImmediateCatch() {
 
   const resultsPromise = once(host, "game:results");
   const others = players.filter((p) => p !== wolfPlayer);
-  others[0].socket.emit("player:vote", { code: roomCode, votedForId: wolfPlayer.socket.id });
-  others[1].socket.emit("player:vote", { code: roomCode, votedForId: wolfPlayer.socket.id });
-  wolfPlayer.socket.emit("player:vote", { code: roomCode, votedForId: others[0].socket.id });
+  others[0].socket.emit("player:vote", { code: roomCode, votedForId: wolfPlayer.token });
+  others[1].socket.emit("player:vote", { code: roomCode, votedForId: wolfPlayer.token });
+  wolfPlayer.socket.emit("player:vote", { code: roomCode, votedForId: others[0].token });
   const finalResults = await resultsPromise;
 
   assertTrue(finalResults.winner === "crew", "expected crew to win when the wolf is caught round 1");
-  assertTrue(finalResults.imposter.id === wolfPlayer.socket.id, "expected the revealed wolf to match");
+  assertTrue(finalResults.imposter.id === wolfPlayer.token, "expected the revealed wolf to match");
   console.log("  PASS");
 
   host.close();
@@ -143,9 +150,9 @@ async function scenario3_downToTwoPlayers() {
   const [victim, voterA] = nonWolves;
 
   const resultsPromise = once(host, "game:results");
-  voterA.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
-  wolfPlayer.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
-  victim.socket.emit("player:vote", { code: roomCode, votedForId: voterA.socket.id });
+  voterA.socket.emit("player:vote", { code: roomCode, votedForId: victim.token });
+  wolfPlayer.socket.emit("player:vote", { code: roomCode, votedForId: victim.token });
+  victim.socket.emit("player:vote", { code: roomCode, votedForId: voterA.token });
   const finalResults = await resultsPromise;
 
   assertTrue(finalResults.winner === "imposter", "expected the wolf to win once down to 2 active players");
@@ -166,8 +173,8 @@ async function scenario4_selfVoteRejectedAndNextRound() {
   await revealAndCollectWords(host, roomCode, players);
 
   const progressPromise = once(host, "game:vote-progress");
-  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[0].socket.id });
-  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].socket.id });
+  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[0].token });
+  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].token });
   const progress = await progressPromise;
   assertTrue(progress.voted === 1, "expected the self-vote to be ignored, leaving only 1 valid vote");
 

@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Join Party Game</title>
 <link rel="stylesheet" href="/player/style.css" />
+<link rel="stylesheet" href="/player/botc/botc.css" />
 </head>
 <body>
   <div id="app">
+
+    <p id="botc-info-toast" class="toast"></p>
 
     <section id="screen-join" class="screen active">
       <h1>🎉 Join the Party</h1>
@@ -40,6 +43,51 @@
       <button id="btn-start-voting" class="btn-primary">Start Discussion &amp; Voting</button>
     </section>
 
+    <section id="screen-avalon-role-reveal" class="screen">
+      <h1>🎭 Your Role</h1>
+      <p id="avalon-role-team" class="subtitle"></p>
+      <p id="avalon-role-detail" class="word-reveal-text"></p>
+      <p class="hint">Waiting for the host to begin the quests…</p>
+    </section>
+
+    <section id="screen-avalon-team-proposal" class="screen">
+      <h2>Propose a Team</h2>
+      <p id="avalon-proposal-status" class="subtitle"></p>
+      <div id="avalon-team-picker" class="entry-checklist"></div>
+      <button type="button" id="btn-avalon-submit-team" class="btn-primary" disabled>Propose Team</button>
+      <p id="avalon-proposal-error" class="error"></p>
+    </section>
+
+    <section id="screen-avalon-team-vote" class="screen">
+      <h2>Vote on the Team</h2>
+      <p id="avalon-vote-team-text" class="subtitle"></p>
+      <button type="button" id="btn-avalon-approve" class="vote-btn">✅ Approve</button>
+      <button type="button" id="btn-avalon-reject" class="vote-btn">❌ Reject</button>
+      <p id="avalon-team-vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-avalon-quest" class="screen">
+      <h2>On the Quest</h2>
+      <p id="avalon-quest-text" class="subtitle"></p>
+      <button type="button" id="btn-avalon-success" class="vote-btn">✅ Success</button>
+      <button type="button" id="btn-avalon-fail" class="vote-btn">💀 Fail</button>
+      <p id="avalon-quest-status" class="hint"></p>
+    </section>
+
+    <section id="screen-avalon-assassin" class="screen">
+      <h2>Assassin's Guess</h2>
+      <p id="avalon-assassin-status" class="subtitle"></p>
+      <div id="avalon-assassin-picker" class="vote-list"></div>
+      <button type="button" id="btn-avalon-confirm-assassin" class="btn-primary" disabled>Confirm Guess</button>
+    </section>
+
+    <section id="screen-avalon-results" class="screen">
+      <h2 id="avalon-results-title">Game Over</h2>
+      <p id="avalon-results-winner" class="imposter-reveal"></p>
+      <ul id="avalon-results-list" class="results-list"></ul>
+      <p class="hint">Waiting for host to return to the lobby…</p>
+    </section>
+
     <section id="screen-playing" class="screen">
       <h1>🔊 Listen carefully…</h1>
       <p class="subtitle">Discuss with the group, then vote below whenever you're ready.</p>
@@ -58,6 +106,16 @@
       <h1>👀 You're out</h1>
       <p class="subtitle">You've been eliminated — you can keep watching the results each round.</p>
       <p id="spectator-round-text" class="hint"></p>
+    </section>
+
+    <section id="screen-slipup-play" class="screen">
+      <h2>Slip-Up</h2>
+      <p id="slipup-caught-toast" class="toast">😬 You got caught! New word/action assigned.</p>
+      <p class="subtitle">You can't see your own word or action — everyone else can.</p>
+      <div id="slipup-others-list" class="slipup-others-list"></div>
+
+      <h3>Live Scoreboard</h3>
+      <ul id="slipup-scoreboard-player" class="results-list"></ul>
     </section>
 
     <section id="screen-results" class="screen">
@@ -180,6 +238,38 @@
       <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
+    <section id="screen-botc-role" class="screen">
+      <h1>🕯️ Your Role</h1>
+      <div class="botc-role-card">
+        <div id="botc-role-name" class="botc-role-name"></div>
+        <div id="botc-role-alignment" class="botc-role-alignment"></div>
+        <div id="botc-role-hint" class="botc-role-hint"></div>
+      </div>
+      <p class="hint">The Storyteller will call on you when it's your turn.</p>
+    </section>
+
+    <section id="screen-botc-night-choice" class="screen">
+      <h1 id="botc-night-choice-title">Your Turn</h1>
+      <p id="botc-night-choice-status" class="subtitle"></p>
+      <div id="botc-night-choice-targets" class="botc-target-grid"></div>
+    </section>
+
+    <section id="screen-botc-vote" class="screen">
+      <h1>Time to Vote</h1>
+      <div id="botc-vote-nominee" class="botc-nominee-banner"></div>
+      <div class="botc-vote-buttons">
+        <button type="button" id="btn-botc-vote-yes" class="vote-btn">✅ Yes</button>
+        <button type="button" id="btn-botc-vote-no" class="vote-btn">❌ No</button>
+      </div>
+      <p id="botc-vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-botc-ended" class="screen">
+      <h1>Game Over</h1>
+      <p id="botc-ended-text" class="botc-ended-text"></p>
+      <p class="hint">Waiting for the host to return to the lobby…</p>
+    </section>
+
   </div>
 
   <div id="wwt-submit-widget" class="wwt-submit-widget" style="display:none;">
@@ -191,10 +281,25 @@
     </div>
   </div>
 
+  <button id="btn-wheel-submit-toggle" class="wheel-floating-btn">🎯 Punishment idea</button>
+  <div id="wheel-submit-panel" class="wheel-panel hidden">
+    <div class="wheel-panel-header">
+      <h2>Suggest a Punishment</h2>
+      <button id="btn-wheel-submit-close" class="wheel-close-btn">×</button>
+    </div>
+    <div class="wheel-add-row">
+      <input id="wheel-submit-input" type="text" placeholder="Your punishment idea..." />
+      <button id="btn-wheel-submit" class="btn-primary">Submit</button>
+    </div>
+    <div id="wheel-submit-status"></div>
+  </div>
+
   <audio id="audio-player" preload="auto"></audio>
   <div id="youtube-player-container" style="position:absolute; left:-9999px; width:1px; height:1px;"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/session.js"></script>
   <script src="/player/player.js"></script>
+  <script type="module" src="/player/botc/main.js"></script>
 </body>
 </html>

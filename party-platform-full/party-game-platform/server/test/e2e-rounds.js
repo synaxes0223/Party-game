@@ -20,25 +20,32 @@ function connect() {
   });
 }
 
+let tokenCounter = 0;
+function nextToken() {
+  return `e2e-rounds-token-${tokenCounter++}`;
+}
+
 async function createRoom() {
   const host = await connect();
+  const hostToken = nextToken();
   const created = await new Promise((resolve) => {
     host.once("host:room-created", resolve);
-    host.emit("host:create-room");
+    host.emit("host:create-room", { token: hostToken });
   });
-  return { host, roomCode: created.room.code };
+  return { host, hostToken, roomCode: created.room.code };
 }
 
 async function joinPlayers(roomCode, names) {
   const players = [];
   for (const name of names) {
     const socket = await connect();
+    const token = nextToken();
     await new Promise((resolve, reject) => {
       socket.once("player:joined", () => resolve());
       socket.once("player:join-error", (d) => reject(new Error(d.error)));
-      socket.emit("player:join-room", { code: roomCode, nickname: name });
+      socket.emit("player:join-room", { code: roomCode, nickname: name, token });
     });
-    players.push({ name, socket });
+    players.push({ name, socket, token });
   }
   return players;
 }
@@ -90,8 +97,8 @@ async function scenario1(host, roomCode, players) {
   await playSyncedAudio(host, roomCode, players);
 
   const roundResultsPromise = once(host, "game:round-results");
-  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[1].socket.id });
-  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].socket.id });
+  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[1].token });
+  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].token });
   players[2].socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
   players[3].socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
   const roundResult = await roundResultsPromise;
@@ -112,14 +119,14 @@ async function scenario2_eliminateOneRound(host, roomCode, players) {
   const target = players[0];
   const roundResultsPromise = once(host, "game:round-results");
   const resultsPromise = once(host, "game:results").catch(() => null);
-  players[1].socket.emit("player:vote", { code: roomCode, votedForId: target.socket.id });
-  players[2].socket.emit("player:vote", { code: roomCode, votedForId: target.socket.id });
-  players[3].socket.emit("player:vote", { code: roomCode, votedForId: target.socket.id });
+  players[1].socket.emit("player:vote", { code: roomCode, votedForId: target.token });
+  players[2].socket.emit("player:vote", { code: roomCode, votedForId: target.token });
+  players[3].socket.emit("player:vote", { code: roomCode, votedForId: target.token });
   target.socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
   const roundResult = await roundResultsPromise;
 
   assertTrue(roundResult.eliminated !== null, "expected an elimination on a 3/4 majority");
-  assertTrue(roundResult.eliminated.id === target.socket.id, "expected the targeted player to be eliminated");
+  assertTrue(roundResult.eliminated.id === target.token, "expected the targeted player to be eliminated");
   assertTrue(roundResult.remainingActive === 3, "expected 3 active players remaining");
   console.log(`  PASS — ${target.name} eliminated, 3 players remain`);
 
@@ -128,7 +135,7 @@ async function scenario2_eliminateOneRound(host, roomCode, players) {
     console.log("  (targeted player happened to be the imposter — game ended here)");
     return { ended: true, winner: finalResults.winner, eliminatedPlayer: target };
   }
-  return { ended: false, remaining: players.filter((p) => p.socket.id !== target.socket.id), eliminatedPlayer: target };
+  return { ended: false, remaining: players.filter((p) => p.token !== target.token), eliminatedPlayer: target };
 }
 
 async function scenario3_reachTwoPlayers(host, roomCode, remaining, eliminatedPlayer) {
@@ -155,10 +162,10 @@ async function scenario3_reachTwoPlayers(host, roomCode, remaining, eliminatedPl
   const [victim, survivor] = remaining.filter((p) => p !== imposterInRound);
 
   const resultsPromise = once(host, "game:results");
-  imposterInRound.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
-  survivor.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id });
+  imposterInRound.socket.emit("player:vote", { code: roomCode, votedForId: victim.token });
+  survivor.socket.emit("player:vote", { code: roomCode, votedForId: victim.token });
   victim.socket.emit("player:vote", { code: roomCode, votedForId: "skip" });
-  eliminatedPlayer.socket.emit("player:vote", { code: roomCode, votedForId: victim.socket.id }); // ignored
+  eliminatedPlayer.socket.emit("player:vote", { code: roomCode, votedForId: victim.token }); // ignored
   const finalResults = await resultsPromise;
 
   assertTrue(finalResults.winner === "imposter", "expected the imposter to win once down to 2 active players");
@@ -177,13 +184,13 @@ async function scenario4_imposterCaughtImmediately() {
 
   const resultsPromise = once(host, "game:results");
   const others = players.filter((p) => p !== imposterPlayer);
-  others[0].socket.emit("player:vote", { code: roomCode, votedForId: imposterPlayer.socket.id });
-  others[1].socket.emit("player:vote", { code: roomCode, votedForId: imposterPlayer.socket.id });
-  imposterPlayer.socket.emit("player:vote", { code: roomCode, votedForId: others[0].socket.id });
+  others[0].socket.emit("player:vote", { code: roomCode, votedForId: imposterPlayer.token });
+  others[1].socket.emit("player:vote", { code: roomCode, votedForId: imposterPlayer.token });
+  imposterPlayer.socket.emit("player:vote", { code: roomCode, votedForId: others[0].token });
   const finalResults = await resultsPromise;
 
   assertTrue(finalResults.winner === "crew", "expected crew to win when the imposter is caught round 1");
-  assertTrue(finalResults.imposter.id === imposterPlayer.socket.id, "expected the revealed imposter to match");
+  assertTrue(finalResults.imposter.id === imposterPlayer.token, "expected the revealed imposter to match");
   console.log("  PASS");
 
   host.close();
@@ -241,8 +248,8 @@ async function scenario6_selfVoteRejected() {
   await playSyncedAudio(host, roomCode, players);
 
   const progressPromise = once(host, "game:vote-progress");
-  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[0].socket.id });
-  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].socket.id });
+  players[0].socket.emit("player:vote", { code: roomCode, votedForId: players[0].token });
+  players[1].socket.emit("player:vote", { code: roomCode, votedForId: players[2].token });
   const progress = await progressPromise;
 
   assertTrue(progress.voted === 1, "expected the self-vote to be ignored, leaving only 1 valid vote");

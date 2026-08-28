@@ -10,6 +10,9 @@ const whoWroteThat = require("./whoWroteThat");
 const xPeople = require("./xPeople");
 const passTheBomb = require("./passTheBomb");
 const secretMissions = require("./secretMissions");
+const slipUp = require("./slipUp");
+const avalon = require("./avalon");
+const botc = require("./botc");
 
 const GAMES = {
   [findTheImposter.meta.id]: findTheImposter,
@@ -18,6 +21,9 @@ const GAMES = {
   [xPeople.meta.id]: xPeople,
   [passTheBomb.meta.id]: passTheBomb,
   [secretMissions.meta.id]: secretMissions,
+  [slipUp.meta.id]: slipUp,
+  [avalon.meta.id]: avalon,
+  [botc.meta.id]: botc,
 };
 
 function listGames() {

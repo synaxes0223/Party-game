@@ -3,10 +3,12 @@
 // Every player secretly gets 3 real-life missions; the host screen shows
 // the full anonymous mission board (text only, never whose); players claim
 // completed missions and can accuse each other to bust missions and steal
-// points. Because this runs for hours while phones lock and reconnect,
-// this is the platform's first (and so far only) reconnect-capable game --
-// see roomService.js's markDisconnected/joinRoom reclaim path and
-// index.js's disconnect/join-room wiring, both gated on meta.supportsReconnect.
+// points. Because this runs for hours while phones lock and reconnect, it
+// leans hard on the platform's token-based sessions: a player's seat and
+// all their per-player state (mission ownership, score, accusation budget)
+// are keyed off the persistent session token, so a locked-then-unlocked
+// phone reclaims the same seat. On rejoin, index.js calls onPlayerRejoined
+// so this module can re-send that player's private missions and the board.
 // Categories/missions are sourced from the shared prompt pipeline, but
 // player submissions are deliberately rejected here (see onPromptSubmitted).
 
@@ -22,7 +24,6 @@ const meta = {
   maxPlayers: 16,
   supportedModes: ["multiplayer"],
   usesPromptPipeline: true,
-  supportsReconnect: true,
 };
 
 const POOL = promptPacks[meta.id];
@@ -255,40 +256,18 @@ function onEndGame(room, io) {
   return {};
 }
 
-// Player tab-switch/reconnect: re-send private missions + the public board.
-function onPlayerSync(room, io, socketId) {
+// Player tab-switch/reconnect: the session token (and so every per-player
+// key) is stable across the drop, so there is nothing to re-key -- just
+// re-send this player's private missions + the public board.
+function onPlayerRejoined(room, io, playerId) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "in-play") return;
-  io.to(socketId).emit("game:your-missions", { missions: missionsForPlayer(gs, socketId) });
-  io.to(socketId).emit("game:mission-board", {
+  io.to(playerId).emit("game:your-missions", { missions: missionsForPlayer(gs, playerId) });
+  io.to(playerId).emit("game:mission-board", {
     missions: publicBoard(gs),
     scores: scoreboard(gs),
     accusationsLeft: Array.from(gs.accusationsLeft.entries()).map(([id, left]) => ({ id, left })),
   });
-}
-
-// Re-keys every reference to the old socketId (mission ownership, score
-// entry, accusation budget) onto the new one, then re-sends private state --
-// this is what makes a locked-then-unlocked phone survive the whole night.
-function onPlayerReconnected(room, io, oldSocketId, newSocketId) {
-  const gs = room.gameState;
-  if (!gs) return;
-
-  gs.missions.forEach((m) => {
-    if (m.ownerId === oldSocketId) m.ownerId = newSocketId;
-  });
-
-  if (gs.scores.has(oldSocketId)) {
-    gs.scores.set(newSocketId, gs.scores.get(oldSocketId));
-    gs.scores.delete(oldSocketId);
-  }
-  if (gs.accusationsLeft.has(oldSocketId)) {
-    gs.accusationsLeft.set(newSocketId, gs.accusationsLeft.get(oldSocketId));
-    gs.accusationsLeft.delete(oldSocketId);
-  }
-
-  onPlayerSync(room, io, newSocketId);
-  broadcastBoard(room, io);
 }
 
 module.exports = {
@@ -300,6 +279,5 @@ module.exports = {
   onClaimMission,
   onAccuse,
   onEndGame,
-  onPlayerSync,
-  onPlayerReconnected,
+  onPlayerRejoined,
 };

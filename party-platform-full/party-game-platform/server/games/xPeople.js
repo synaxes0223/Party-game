@@ -68,7 +68,7 @@ function startRoundWithPrompt(room, io, prompt) {
 
   const playerCount = activePlayerIds(room).length;
   io.in(room.code).emit("game:prompt", { round: gs.round, text: prompt.text, playerCount });
-  io.to(room.hostSocketId).emit("game:answer-progress", { answered: 0, total: playerCount });
+  io.to(room.hostId).emit("game:answer-progress", { answered: 0, total: playerCount });
   return {};
 }
 
@@ -106,7 +106,7 @@ function onPromptSubmitted(room, io, socketId, text) {
   const insertAt = Math.floor(Math.random() * (gs.promptState.queue.length + 1));
   gs.promptState.queue.splice(insertAt, 0, entry);
 
-  io.to(room.hostSocketId).emit("game:submission-count", { count: gs.promptState.queue.length });
+  io.to(room.hostId).emit("game:submission-count", { count: gs.promptState.queue.length });
   return {};
 }
 
@@ -121,7 +121,7 @@ function onSubmitResponse(room, io, socketId, answer, prediction) {
   const safePrediction = Math.max(0, Math.min(total, Number(prediction) || 0));
   gs.responses.set(socketId, { answer: Boolean(answer), prediction: safePrediction });
 
-  io.to(room.hostSocketId).emit("game:answer-progress", { answered: gs.responses.size, total });
+  io.to(room.hostId).emit("game:answer-progress", { answered: gs.responses.size, total });
 
   if (gs.responses.size >= total) resolveReveal(room, io);
   return {};
@@ -167,7 +167,7 @@ function onNextRound(room, io) {
   const gs = room.gameState;
   if (!gs || gs.phase !== "reveal") return { error: "No reveal to advance from." };
   gs.phase = "prompt-select";
-  io.to(room.hostSocketId).emit("game:prompt-select-ready", {});
+  io.to(room.hostId).emit("game:prompt-select-ready", {});
   return {};
 }
 
