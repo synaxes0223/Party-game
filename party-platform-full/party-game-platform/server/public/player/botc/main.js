@@ -5,6 +5,7 @@
 // only integration point is the one line added to player.js in this task's
 // Step 1 (window.__playerSocket).
 import { store, setState } from "./store.js";
+import { initRoleAndInfo } from "./roleAndInfo.js";
 
 const screens = {
   role: document.getElementById("screen-botc-role"),
@@ -26,3 +27,5 @@ export function showBotcScreen(name) {
 // module.
 store.socket.on("player:joined", ({ room }) => setState({ roomCode: room.code }));
 store.socket.on("player:rejoined", ({ room }) => setState({ roomCode: room.code }));
+
+initRoleAndInfo();
