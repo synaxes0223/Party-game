@@ -6,6 +6,7 @@
 // in this task's Step 1 (window.__hostSocket, and the "botc" branch that
 // calls window.__botcEnterSetup).
 import { store, setState } from "./store.js";
+import { initSetup } from "./setup.js";
 
 const screens = {
   setup: document.getElementById("screen-botc-setup"),
@@ -62,3 +63,5 @@ store.socket.on("host:botc-error", ({ error }) => {
   const el = document.getElementById("botc-setup-error");
   if (el) el.textContent = error;
 });
+
+initSetup();
