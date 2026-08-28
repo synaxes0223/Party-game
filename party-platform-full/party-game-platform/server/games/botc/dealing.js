@@ -71,6 +71,17 @@ function teamCountsOf(state) {
   return counts;
 }
 
+function assignFortuneTellerRedHerring(state) {
+  const ft = state.seats.find((s) => s.characterId === "fortuneTeller");
+  if (!ft) return;
+  const already = state.seats.some((s) => s.reminders.some((r) => r.kind === "red-herring"));
+  if (already) return;
+  const eligible = state.seats.filter((s) => s.seatId !== ft.seatId && s.alignment === "good");
+  if (eligible.length === 0) return;
+  const pick = eligible[Math.floor(Math.random() * eligible.length)];
+  grimoire.addReminder(state, pick, "red-herring", "fortuneTeller", "Red herring");
+}
+
 function shuffle(array) {
   const copy = array.slice();
   for (let i = copy.length - 1; i > 0; i--) {
@@ -80,4 +91,4 @@ function shuffle(array) {
   return copy;
 }
 
-module.exports = { dealManual, dealRandom, teamCountsOf, alignmentForTeam };
+module.exports = { dealManual, dealRandom, teamCountsOf, alignmentForTeam, assignFortuneTellerRedHerring };

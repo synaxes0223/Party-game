@@ -212,6 +212,7 @@ function attach(io, socket, ctx) {
       io.to(seat.playerToken).emit("game:botc-role", { characterId: seat.believedCharacterId, alignment: seat.alignment });
     }
 
+    dealing.assignFortuneTellerRedHerring(state);
     nightLoop.startNight(state);
     maybePromptNightChoice(room, io);
     emitState(room, io);
@@ -241,6 +242,7 @@ function attach(io, socket, ctx) {
       io.to(seat.playerToken).emit("game:botc-role", { characterId: seat.believedCharacterId, alignment: seat.alignment });
     }
 
+    dealing.assignFortuneTellerRedHerring(state);
     nightLoop.startNight(state);
     maybePromptNightChoice(room, io);
     emitState(room, io);

@@ -30,6 +30,7 @@ function startNight(state) {
   state.phase = "night";
   grimoire.removeRemindersOfKind(state, "poisoned");
   grimoire.removeRemindersOfKind(state, "protected");
+  grimoire.removeRemindersOfKind(state, "ft-pick");
   state.nightPointer = { orderIndex: 0, stepId: orderFor(state)[0] || null };
   skipToSchedulable(state);
 }
@@ -84,6 +85,14 @@ function submitChoice(state, choice) {
   if (!step.requiresChoice) return { error: `Step ${step.stepId} does not take a player-driven choice.` };
   const module = characters.getModuleForStep(step.stepId);
   module.applyChoice(state, step.seat, choice);
+
+  // Two-phase character (Fortune Teller): the choice it just stored flips
+  // its own requiresChoice to null. Leave the pointer on this step so the
+  // Storyteller can still pick a candidate for it.
+  if (!module.requiresChoice(state, step.seat) && module.computeCandidates(state, step.seat).length > 0) {
+    return { convertedToReveal: true };
+  }
+
   advance(state);
   return {};
 }

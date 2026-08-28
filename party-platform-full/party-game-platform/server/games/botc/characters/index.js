@@ -6,6 +6,7 @@
 const TEAM_OF = {
   washerwoman: "townsfolk",
   empath: "townsfolk",
+  fortuneTeller: "townsfolk",
   soldier: "townsfolk",
   chef: "townsfolk",
   investigator: "townsfolk",
@@ -35,6 +36,7 @@ function getModule(characterId) {
     modulesById = {
       washerwoman: require("./washerwoman"),
       empath: require("./empath"),
+      fortuneTeller: require("./fortuneTeller"),
       soldier: require("./soldier"),
       chef: require("./chef"),
       investigator: require("./investigator"),

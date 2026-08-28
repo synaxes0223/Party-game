@@ -10,11 +10,11 @@ function seededState(names) {
   return s;
 }
 
-test("teamOf and charactersOfTeam reflect the eleven-character registry", () => {
+test("teamOf and charactersOfTeam reflect the twelve-character registry", () => {
   assert.equal(characters.teamOf("imp"), "demon");
   assert.equal(characters.teamOf("washerwoman"), "townsfolk");
   assert.equal(characters.teamOf("no-such-character"), null);
-  assert.deepEqual(characters.charactersOfTeam("townsfolk").sort(), ["chef", "empath", "investigator", "librarian", "monk", "soldier", "washerwoman"]);
+  assert.deepEqual(characters.charactersOfTeam("townsfolk").sort(), ["chef", "empath", "fortuneTeller", "investigator", "librarian", "monk", "soldier", "washerwoman"]);
   assert.deepEqual(characters.charactersOfTeam("minion").sort(), ["baron", "poisoner"]);
 });
 
@@ -83,4 +83,29 @@ test("dealRandom errors when the requested total does not match the seat count",
   const s = seededState(["p1", "p2", "p3"]);
   const result = dealing.dealRandom(s, { townsfolk: 3, outsiders: 0, minions: 1, demon: 1 }); // totals 5, only 3 seats
   assert.equal(typeof result.error, "string");
+});
+
+test("assignFortuneTellerRedHerring marks exactly one good non-FT seat, and is idempotent", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2, 3, 4].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  dealing.dealManual(s, [
+    { seatId: 1, characterId: "fortuneTeller" },
+    { seatId: 2, characterId: "empath" },
+    { seatId: 3, characterId: "poisoner" },
+    { seatId: 4, characterId: "imp" },
+  ]);
+  dealing.assignFortuneTellerRedHerring(s);
+  const marked = s.seats.filter((seat) => seat.reminders.some((r) => r.kind === "red-herring"));
+  assert.equal(marked.length, 1);
+  assert.equal(marked[0].characterId, "empath", "only the sole good non-FT seat can be the herring");
+  dealing.assignFortuneTellerRedHerring(s); // idempotent
+  assert.equal(s.seats.filter((seat) => seat.reminders.some((r) => r.kind === "red-herring")).length, 1);
+});
+
+test("assignFortuneTellerRedHerring is a no-op when there is no Fortune Teller", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  dealing.dealManual(s, [{ seatId: 1, characterId: "empath" }, { seatId: 2, characterId: "imp" }]);
+  dealing.assignFortuneTellerRedHerring(s);
+  assert.equal(s.seats.some((seat) => seat.reminders.some((r) => r.kind === "red-herring")), false);
 });

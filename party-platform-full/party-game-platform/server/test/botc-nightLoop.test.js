@@ -109,3 +109,35 @@ test("isNightOver becomes true once every schedulable step has run", () => {
   assert.equal(nightLoop.isNightOver(s), true);
   assert.equal(nightLoop.currentStep(s), null);
 });
+
+test("submitChoice on the Fortune Teller keeps the same step active as a reveal", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2, 3].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  dealing.dealManual(s, [
+    { seatId: 1, characterId: "fortuneTeller" },
+    { seatId: 2, characterId: "imp" },
+    { seatId: 3, characterId: "empath" },
+  ]);
+  nightLoop.startNight(s);
+  // walk to the fortuneTeller step
+  let guard = 0;
+  while (s.phase === "night" && guard++ < 12) {
+    const step = nightLoop.currentStep(s);
+    if (step && step.stepId === "fortuneTeller") break;
+    nightLoop.advance(s);
+  }
+  const before = nightLoop.currentStep(s);
+  assert.equal(before.stepId, "fortuneTeller");
+  assert.ok(before.requiresChoice, "starts as a choice step");
+
+  nightLoop.submitChoice(s, { targetSeatIds: [2, 3] });
+
+  const after = nightLoop.currentStep(s);
+  assert.equal(after.stepId, "fortuneTeller", "still on the Fortune Teller after the choice");
+  assert.equal(after.requiresChoice, null, "now a reveal step");
+  assert.equal(after.candidates.length, 2, "yes/no candidates are ready for the Storyteller");
+
+  nightLoop.submitCandidate(s, after.candidates[0].id);
+  const next = nightLoop.currentStep(s);
+  assert.ok(!next || next.stepId !== "fortuneTeller", "picking a candidate advances past the Fortune Teller");
+});
