@@ -153,6 +153,20 @@
   margin-bottom: 16px;
 }
 
+.botc-prompt {
+  border: 1px solid var(--accent, #c58);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.botc-slayer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
 .botc-vote-tally {
   display: flex;
   flex-direction: column;

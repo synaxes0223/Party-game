@@ -8,6 +8,7 @@ const distribution = require("./distribution");
 const characters = require("./characters");
 const nightLoop = require("./nightLoop");
 const voting = require("./voting");
+const slayer = require("./slayer");
 const winConditions = require("./winConditions");
 
 const meta = {
@@ -100,6 +101,17 @@ function publicStateView(state) {
                   characters.teamOf(
                     (stateModule.findSeatById(state, state.day.pendingVirgin.nominatorSeatId) || {}).characterId
                   ) === "townsfolk",
+              }
+            : null,
+          pendingSlayer: state.day.pendingSlayer
+            ? {
+                ...state.day.pendingSlayer,
+                shooterNickname: nick(state, state.day.pendingSlayer.shooterSeatId),
+                targetNickname: nick(state, state.day.pendingSlayer.targetSeatId),
+                targetRegistersAsDemon:
+                  characters.teamOf(
+                    (stateModule.findSeatById(state, state.day.pendingSlayer.targetSeatId) || {}).characterId
+                  ) === "demon",
               }
             : null,
         }
@@ -430,6 +442,48 @@ function attach(io, socket, ctx) {
         maybePromptVoteTurn(room, io);
       }
       room.gameState.day.pendingVirgin = null;
+      emitState(room, io);
+    });
+  });
+
+  // The Slayer's shot is public theatre, so the Storyteller enters it: they
+  // name the shooter (must be the Slayer, shot unused) and the target. The
+  // engine only records state.day.pendingSlayer -- whether anyone dies is
+  // the Storyteller's call on host:botc-slayer-resolve, because a drunk or
+  // poisoned Slayer's shot does nothing and the app cannot judge that.
+  socket.on("host:botc-slayer-shot", ({ code, shooterSeatId, targetSeatId }) => {
+    withHostRoom(code, (room) => {
+      const st = room.gameState;
+      if (st.phase !== "day-discussion" || !st.day) return;
+      const shooter = stateModule.findSeatById(st, shooterSeatId);
+      if (!shooter || !slayer.isSlayer(shooter) || slayer.hasUsedShot(shooter)) return;
+      st.day.pendingSlayer = { shooterSeatId, targetSeatId };
+      emitState(room, io);
+    });
+  });
+
+  // The Storyteller's ruling on a pending Slayer shot. Either way the shot
+  // is spent. A Slayer kill is not an execution, so applyWinCheckAndMaybeEnd
+  // runs with no context -- but if the target was the Demon, the demon-dead
+  // rule ends the game for good. The result broadcasts to the whole room:
+  // the shot was said out loud, so the outcome is public too.
+  socket.on("host:botc-slayer-resolve", ({ code, killed }) => {
+    withHostRoom(code, (room) => {
+      const st = room.gameState;
+      const pending = st.day && st.day.pendingSlayer;
+      if (!pending) return;
+      const shooter = stateModule.findSeatById(st, pending.shooterSeatId);
+      const target = stateModule.findSeatById(st, pending.targetSeatId);
+      slayer.resolveShot(st, shooter, target, !!killed);
+      st.day.pendingSlayer = null;
+      io.in(room.code).emit("game:botc-slayer-result", {
+        shooterSeatId: pending.shooterSeatId,
+        targetSeatId: pending.targetSeatId,
+        killed: !!killed,
+        shooterNickname: nick(st, pending.shooterSeatId),
+        targetNickname: nick(st, pending.targetSeatId),
+      });
+      applyWinCheckAndMaybeEnd(room, io);
       emitState(room, io);
     });
   });

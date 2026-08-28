@@ -48,6 +48,10 @@ const CHARACTERS = {
     label: "Virgin",
     hint: "The first time you are nominated, if the nominator is a Townsfolk, they die instead of you.",
   },
+  slayer: {
+    label: "Slayer",
+    hint: "Once per game, during the day, publicly name a player. If they are the Demon, they die.",
+  },
   butler: {
     label: "Butler",
     hint: "Each night, choose a player (not yourself). Tomorrow, you may only vote if they are voting too.",
@@ -100,5 +104,12 @@ function renderEnded({ winner, reason }) {
 export function initRoleAndInfo() {
   store.socket.on("game:botc-role", renderRole);
   store.socket.on("game:botc-info", ({ text }) => showInfoToast(text));
+  store.socket.on("game:botc-slayer-result", ({ shooterNickname, targetNickname, killed }) => {
+    showInfoToast(
+      killed
+        ? `${shooterNickname} shot ${targetNickname} — the Demon dies!`
+        : `${shooterNickname} shot ${targetNickname} — nothing happens.`
+    );
+  });
   store.socket.on("game:botc-ended", renderEnded);
 }

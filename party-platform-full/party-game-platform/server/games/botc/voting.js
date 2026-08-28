@@ -16,6 +16,7 @@ function startDay(state) {
     currentNomination: null,
     onBlock: null,
     pendingVirgin: null,
+    pendingSlayer: null,
   };
 }
 

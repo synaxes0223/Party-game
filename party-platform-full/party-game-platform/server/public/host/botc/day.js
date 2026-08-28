@@ -103,6 +103,33 @@ function renderVirginPrompt() {
     `Trigger the Virgin?`;
 }
 
+function renderSlayerRow() {
+  const state = store.latestState;
+  if (!state) return;
+  const opts = state.seats
+    .map((s, i) => `<option value="${s.seatId}">${i + 1}. ${s.nickname}${s.alive ? "" : " (dead)"}</option>`)
+    .join("");
+  const shooter = document.getElementById("botc-slayer-shooter-select");
+  const target = document.getElementById("botc-slayer-target-select");
+  const prevS = shooter.value;
+  const prevT = target.value;
+  shooter.innerHTML = opts;
+  target.innerHTML = opts;
+  if (state.seats.some((s) => String(s.seatId) === prevS)) shooter.value = prevS;
+  if (state.seats.some((s) => String(s.seatId) === prevT)) target.value = prevT;
+
+  const box = document.getElementById("botc-slayer-prompt");
+  const pending = state.day && state.day.pendingSlayer;
+  if (!pending) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  document.getElementById("botc-slayer-prompt-text").textContent =
+    `${pending.shooterNickname} shot ${pending.targetNickname}. ` +
+    `Target registers as the Demon: ${pending.targetRegistersAsDemon ? "YES" : "no"}. Resolve:`;
+}
+
 function renderOnBlockAndExecute() {
   const state = store.latestState;
   const onBlockEl = document.getElementById("botc-onblock");
@@ -156,6 +183,7 @@ export function initDayPanel() {
   onStateChange(() => {
     renderDayPanel();
     renderVirginPrompt();
+    renderSlayerRow();
     renderEndedBanner();
   });
 
@@ -170,5 +198,19 @@ export function initDayPanel() {
   });
   document.getElementById("btn-botc-virgin-spare").addEventListener("click", () => {
     store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: false, proceed: true });
+  });
+
+  document.getElementById("btn-botc-slayer-shot").addEventListener("click", () => {
+    store.socket.emit("host:botc-slayer-shot", {
+      code: store.roomCode,
+      shooterSeatId: Number(document.getElementById("botc-slayer-shooter-select").value),
+      targetSeatId: Number(document.getElementById("botc-slayer-target-select").value),
+    });
+  });
+  document.getElementById("btn-botc-slayer-kill").addEventListener("click", () => {
+    store.socket.emit("host:botc-slayer-resolve", { code: store.roomCode, killed: true });
+  });
+  document.getElementById("btn-botc-slayer-nothing").addEventListener("click", () => {
+    store.socket.emit("host:botc-slayer-resolve", { code: store.roomCode, killed: false });
   });
 }
