@@ -88,6 +88,17 @@ function distributionHintFor(playerCount) {
 
 function renderManualDealRows() {
   const container = document.getElementById("botc-manual-deal-rows");
+  // Preserve any characters already chosen, keyed by player id, across a
+  // re-render triggered by an unrelated state update (e.g. another player
+  // joining) -- without this, every rebuild silently wipes the Storyteller's
+  // in-progress selections. Same bug family as the reorder-desync fix
+  // (a full DOM rebuild discarding data the Storyteller already entered),
+  // and reuses that same fix's dataset.playerId convention.
+  const previousChoices = new Map();
+  container.querySelectorAll("select").forEach((select) => {
+    if (select.value) previousChoices.set(select.dataset.playerId, select.value);
+  });
+
   container.innerHTML = "";
   orderedPlayerIds.forEach((playerId, index) => {
     const row = document.createElement("div");
@@ -97,6 +108,7 @@ function renderManualDealRows() {
     select.className = "input-field";
     select.dataset.playerId = playerId;
     select.innerHTML = `<option value="">-- choose --</option>` + CHARACTERS.map((c) => `<option value="${c.id}">${c.label} (${c.team})</option>`).join("");
+    if (previousChoices.has(playerId)) select.value = previousChoices.get(playerId);
     row.innerHTML = `<span>${seatNumber}. ${nicknameFor(playerId)}</span>`;
     row.appendChild(select);
     container.appendChild(row);

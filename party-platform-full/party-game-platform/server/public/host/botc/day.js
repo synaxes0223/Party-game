@@ -10,6 +10,14 @@ function renderNominationSelects() {
   const nomineeSelect = document.getElementById("botc-nominee-select");
   if (!state) return;
 
+  // Preserve the Storyteller's in-progress selection across a re-render
+  // triggered by an unrelated state update (e.g. another player joining) --
+  // without this, every rebuild silently resets both selects to seat 1,
+  // discarding a selection made moments earlier. Restored only if that
+  // seatId still exists, since a departure/reorder could invalidate it.
+  const previousNominator = nominatorSelect.value;
+  const previousNominee = nomineeSelect.value;
+
   // Show each seat's 1-based position in state.seats, not its raw seatId --
   // grimoire.js's renderSeatRow does the same, and for the same reason
   // (seatId is a stable identifier that reordering does not renumber; the
@@ -21,6 +29,9 @@ function renderNominationSelects() {
     .join("");
   nominatorSelect.innerHTML = optionsHtml;
   nomineeSelect.innerHTML = optionsHtml;
+
+  if (state.seats.some((s) => String(s.seatId) === previousNominator)) nominatorSelect.value = previousNominator;
+  if (state.seats.some((s) => String(s.seatId) === previousNominee)) nomineeSelect.value = previousNominee;
 }
 
 function renderVoteTally() {
@@ -85,6 +96,7 @@ function renderOnBlockAndExecute() {
   if (!onBlock) {
     onBlockEl.textContent = "Nobody is currently on the block.";
     executeBtn.hidden = true;
+    executeBtn.onclick = null;
     return;
   }
   const seat = state.seats.find((s) => s.seatId === onBlock.seatId);

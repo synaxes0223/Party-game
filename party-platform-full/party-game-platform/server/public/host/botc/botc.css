@@ -3,6 +3,24 @@
    :root (both stylesheets apply to the same document, so --bg/--panel/
    --accent/etc. are already in scope here -- no re-declaration needed). */
 
+/* The `hidden` attribute's hiding effect comes from a User-Agent-origin
+   [hidden] { display: none; } rule. Several rules below (and .btn-primary in
+   style.css) declare their own author-origin `display` value on the SAME
+   elements this file toggles `.hidden` on -- and in CSS cascade order,
+   origin beats specificity, so an author-origin display declaration always
+   wins over the UA-origin [hidden] rule regardless of selector specificity.
+   Restating it here with ID selectors (which outrank the class selectors
+   that caused the conflict, so no !important is needed) fixes it for the
+   three elements that were actually affected; #botc-night-panel/#botc-day-
+   panel/#botc-ended-banner use .botc-panel/.botc-ended-banner, neither of
+   which declares a conflicting display, so their existing hidden toggling
+   was never broken and needs no change here. */
+#botc-cover-screen[hidden],
+#btn-botc-begin-night[hidden],
+#btn-botc-execute[hidden] {
+  display: none;
+}
+
 .botc-panel {
   background: var(--panel);
   border-radius: var(--radius);
