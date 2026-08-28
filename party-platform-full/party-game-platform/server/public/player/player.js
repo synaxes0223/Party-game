@@ -1,4 +1,5 @@
 const socket = io();
+window.__playerSocket = socket;
 
 let roomCode = null;
 let myId = null;

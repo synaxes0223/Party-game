@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Join Party Game</title>
 <link rel="stylesheet" href="/player/style.css" />
+<link rel="stylesheet" href="/player/botc/botc.css" />
 </head>
 <body>
   <div id="app">
@@ -122,6 +123,40 @@
       <p class="hint">Waiting for host to return to the lobby…</p>
     </section>
 
+    <section id="screen-botc-role" class="screen">
+      <h1>🕯️ Your Role</h1>
+      <div class="botc-role-card">
+        <div id="botc-role-name" class="botc-role-name"></div>
+        <div id="botc-role-alignment" class="botc-role-alignment"></div>
+        <div id="botc-role-hint" class="botc-role-hint"></div>
+      </div>
+      <p class="hint">The Storyteller will call on you when it's your turn.</p>
+    </section>
+
+    <section id="screen-botc-night-choice" class="screen">
+      <h1 id="botc-night-choice-title">Your Turn</h1>
+      <p id="botc-night-choice-status" class="subtitle"></p>
+      <div id="botc-night-choice-targets" class="botc-target-grid"></div>
+    </section>
+
+    <section id="screen-botc-vote" class="screen">
+      <h1>Time to Vote</h1>
+      <div id="botc-vote-nominee" class="botc-nominee-banner"></div>
+      <div class="botc-vote-buttons">
+        <button type="button" id="btn-botc-vote-yes" class="vote-btn">✅ Yes</button>
+        <button type="button" id="btn-botc-vote-no" class="vote-btn">❌ No</button>
+      </div>
+      <p id="botc-vote-status" class="hint"></p>
+    </section>
+
+    <section id="screen-botc-ended" class="screen">
+      <h1>Game Over</h1>
+      <p id="botc-ended-text" class="botc-ended-text"></p>
+      <p class="hint">Waiting for the host to return to the lobby…</p>
+    </section>
+
+    <p id="botc-info-toast" class="toast"></p>
+
   </div>
 
   <button id="btn-wheel-submit-toggle" class="wheel-floating-btn">🎯 Punishment idea</button>
@@ -143,5 +178,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/shared/session.js"></script>
   <script src="/player/player.js"></script>
+  <script type="module" src="/player/botc/main.js"></script>
 </body>
 </html>

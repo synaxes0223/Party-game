@@ -1,0 +1,67 @@
+/* botc.css
+   Reuses the CSS custom properties already declared by /player/style.css's
+   :root (both stylesheets apply to the same document, so --bg/--panel/
+   --accent/etc. are already in scope here). Every screen this feature adds
+   uses the existing .screen/.active convention (see this plan's own
+   "Ruling" section for why) -- this file has no hidden-attribute-based
+   visibility rules to get wrong. */
+
+.botc-role-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.botc-role-name {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.botc-role-alignment {
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.botc-role-alignment.evil {
+  color: var(--accent);
+}
+
+.botc-role-hint {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+.botc-target-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.botc-nominee-banner {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.botc-vote-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.botc-vote-buttons .vote-btn {
+  flex: 1;
+}
+
+.botc-ended-text {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 8px;
+}
