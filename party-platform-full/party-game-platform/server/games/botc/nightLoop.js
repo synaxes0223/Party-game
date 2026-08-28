@@ -29,6 +29,7 @@ function startNight(state) {
   else state.dayNumber += 1;
   state.phase = "night";
   grimoire.removeRemindersOfKind(state, "poisoned");
+  grimoire.removeRemindersOfKind(state, "protected");
   state.nightPointer = { orderIndex: 0, stepId: orderFor(state)[0] || null };
   skipToSchedulable(state);
 }

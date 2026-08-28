@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const state = require("../games/botc/state");
+const dealing = require("../games/botc/dealing");
 const grimoire = require("../games/botc/grimoire");
 
 function seededState(names) {
@@ -126,4 +127,13 @@ test("setAlive toggles the alive flag", () => {
   assert.equal(seat.alive, false);
   grimoire.setAlive(seat, true);
   assert.equal(seat.alive, true);
+});
+
+test("isSafeFromDemon is true for a seat carrying a protected reminder", () => {
+  const s = state.createInitialState();
+  s.seats = [state.createSeat(1, "t1", "A")];
+  dealing.dealManual(s, [{ seatId: 1, characterId: "empath" }]);
+  assert.equal(grimoire.isSafeFromDemon(s.seats[0]), false);
+  grimoire.addReminder(s, s.seats[0], "protected", "monk", "Protected");
+  assert.equal(grimoire.isSafeFromDemon(s.seats[0]), true);
 });

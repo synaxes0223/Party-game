@@ -28,6 +28,7 @@ function isEvilRegistering(seat) {
 }
 
 function isSafeFromDemon(seat) {
+  if (seat.reminders.some((r) => r.kind === "protected")) return true;
   return seat.characterId === "soldier" && !isImpaired(seat);
 }
 
