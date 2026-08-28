@@ -6,6 +6,7 @@
 // Step 1 (window.__playerSocket).
 import { store, setState } from "./store.js";
 import { initRoleAndInfo } from "./roleAndInfo.js";
+import { initNightChoice } from "./nightChoice.js";
 
 const screens = {
   role: document.getElementById("screen-botc-role"),
@@ -29,3 +30,4 @@ store.socket.on("player:joined", ({ room }) => setState({ roomCode: room.code })
 store.socket.on("player:rejoined", ({ room }) => setState({ roomCode: room.code }));
 
 initRoleAndInfo();
+initNightChoice();
