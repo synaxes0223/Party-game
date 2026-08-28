@@ -29,7 +29,7 @@ Decision (confirmed with the user): add exactly two minimal, generic lines to `h
 - Front-end UI files use native `<script type="module">` — no build step.
 - New host UI files live under `public/host/botc/`; the only existing front-end files touched are `public/host/host.js` (the two lines above) and `public/host/index.html` (new markup + link/script tags). `public/player/*` is untouched by this plan.
 - Backend changes are confined to `games/botc/index.js` and `games/botc/dealing.js` — no task touches `state.js`, `grimoire.js`, `nightOrder.js`, `nightLoop.js`, `voting.js`, `winConditions.js`, `distribution.js`, or any file under `characters/`/`steps/` (all already reviewed and merged; this plan only adds new callers of their existing exports).
-- Every existing `host:botc-*`/`player:botc-*` event and `test/e2e-botc.js`'s existing 2 scenarios (14 PASS lines) must keep passing unchanged — this plan adds new events/fields, it does not remove or change the meaning of existing ones, except the one documented, necessary exception: `onPlayerRejoined` no longer sends `host:botc-state` to a player (Task 1 — this was a real information-leak bug once Task 1 also extends that view with true character/alignment, and no existing test currently asserts on that specific line's behavior — confirmed by reading `test/e2e-botc.js` in full before this plan was written).
+- Every existing `host:botc-*`/`player:botc-*` event must keep passing unchanged — this plan adds new events/fields, it does not remove or change the meaning of existing ones, except the one documented, necessary exception: `onPlayerRejoined` no longer sends `host:botc-state` to a player (Task 1 — this was a real information-leak bug once Task 1 also extends that view with true character/alignment). **Correction found during SDD execution:** an earlier draft of this line claimed "no existing test asserts on that specific line's behavior" — that was wrong. `test/e2e-botc.js`'s existing Scenario 1 reconnection check *does* await `host:botc-state` arriving on the reconnecting player's own socket, and hangs forever once that emit is removed. Task 1's Step 4 (below) includes the fix: adapt that pre-existing check to read the same facts (seat alive, poisoned reminder survives reconnect) from the *host's* state via `host:botc-request-state`, instead of expecting the player to receive it.
 - Source files in this repo have mixed CRLF/LF line endings, and this repo has `core.autocrlf=true`: the real working-tree copy of every file this plan modifies is CRLF; `git show`/`git diff` normalize the stored blob to LF, which is expected and not a defect (confirmed independently three times across the two prior BotC plans). New files created by this plan should use LF (Node/npm-authored `.js`/`.css`/`.html` files in this repo are typically saved as LF by editors; match whatever your editor does by default — do not hand-craft CRLF).
 - The Storyteller-facing UI is tuned for information density and speed (spec §1, decision 4) — no onboarding/tutorial copy, no confirmation dialogs on routine actions (only on execution and win-condition confirmation, per spec §7's "Dusk" section, which is a later plan's T6 scope — this plan's vertical slice does not yet implement automatic win-condition *prompts* beyond the backend's existing automatic `game:botc-ended` on Demon-death/evil-majority; see Task 7's scope note).
 
@@ -477,11 +477,64 @@ Replace `games/botc/index.js` with the code above exactly.
 
 Run: `node --check games/botc/index.js && node --test "test/*.test.js"` — expect syntax OK, 268/268 unchanged (this task adds no unit tests; it only changes `games/botc/index.js`, which no unit test file imports directly).
 
-- [ ] **Step 3: Verify the existing e2e scenarios still pass**
+- [ ] **Step 3: Fix Scenario 1's pre-existing reconnection check before running anything**
 
-Run: `node test/e2e-botc.js` — expect Scenario 1's 10 PASS lines and Scenario 2's 4 PASS lines to print unchanged, then `ALL BOTC E2E SCENARIOS PASSED`, exit 0. (Scenario 2's disconnected-player-reclaims-seat check does not assert on the exact payload of anything this task removed, so it should be unaffected — confirm this by reading the actual PASS output, not by assumption.)
+`test/e2e-botc.js`'s existing Scenario 1 contains a reconnection check (from an earlier plan) that awaits `host:botc-state` arriving on the *reconnecting player's own socket* to verify the reclaimed seat's `alive`/`reminders` survived the disconnect — the exact emit Step 1's `onPlayerRejoined` change removes. **Do this before attempting to run `test/e2e-botc.js` at all** — with Step 1 already applied, the unmodified test would hang forever at that `await`, not fail cleanly.
 
-- [ ] **Step 4: Add e2e coverage for this task's three changes**
+Find this block (identifiable by its comment along the lines of `// ---- Reconnection: the poisoned Empath drops mid-game and rejoins ----`, inside Scenario 1, well before Scenario 2 begins):
+
+```js
+    const roleAgainPromise = once(returningEmpath, "game:botc-role");
+    const stateAgainPromise = once(returningEmpath, "host:botc-state");
+    const playerListAgainPromise = once(returningEmpath, "room:player-list");
+    const rejoinedPromise = once(returningEmpath, "player:rejoined");
+    returningEmpath.emit("player:join-room", { code: roomCode, nickname: "ignored-on-rejoin", token: empathPlayer.token });
+    await rejoinedPromise;
+
+    const roleAgain = await roleAgainPromise;
+    assertTrue(roleAgain.characterId === empathOriginalRole.characterId, "reconnect resends the same characterId");
+    assertTrue(roleAgain.alignment === empathOriginalRole.alignment, "reconnect resends the same alignment");
+
+    const stateAgain = (await stateAgainPromise).state;
+    const empathSeatAgain = stateAgain.seats.find((s) => s.nickname === "Empath");
+    assertTrue(empathSeatAgain.alive === true, "the reclaimed seat is still alive");
+    assertTrue(empathSeatAgain.reminders.some((r) => r.kind === "poisoned"), "the reclaimed seat still shows the poisoned reminder");
+```
+
+Replace it with (same intent — prove the reclaimed seat's alive/reminders survived the reconnect — read from the host's own state instead of expecting the player to receive it, since the player no longer does):
+
+```js
+    const roleAgainPromise = once(returningEmpath, "game:botc-role");
+    const playerListAgainPromise = once(returningEmpath, "room:player-list");
+    const rejoinedPromise = once(returningEmpath, "player:rejoined");
+    returningEmpath.emit("player:join-room", { code: roomCode, nickname: "ignored-on-rejoin", token: empathPlayer.token });
+    await rejoinedPromise;
+
+    const roleAgain = await roleAgainPromise;
+    assertTrue(roleAgain.characterId === empathOriginalRole.characterId, "reconnect resends the same characterId");
+    assertTrue(roleAgain.alignment === empathOriginalRole.alignment, "reconnect resends the same alignment");
+
+    // The player no longer receives host:botc-state on rejoin (Step 1's
+    // fix) -- the same "did the reclaimed seat's state actually survive"
+    // fact this check exists to prove is read from the HOST's own state
+    // instead, which is legitimately entitled to it. This still exercises
+    // the real Task-12-era regression class (findSeatById vs
+    // findSeatByToken) this check was originally written to catch.
+    const hostStateAfterRejoinPromise = once(host, "host:botc-state");
+    host.emit("host:botc-request-state", { code: roomCode });
+    const stateAgain = (await hostStateAfterRejoinPromise).state;
+    const empathSeatAgain = stateAgain.seats.find((s) => s.nickname === "Empath");
+    assertTrue(empathSeatAgain.alive === true, "the reclaimed seat is still alive");
+    assertTrue(empathSeatAgain.reminders.some((r) => r.kind === "poisoned"), "the reclaimed seat still shows the poisoned reminder");
+```
+
+The remaining lines of that block (`const playerListAgain = await playerListAgainPromise;`, its assertion, the `console.log("  PASS -- ...")`, and `empathPlayer.socket = returningEmpath;`) are unchanged — only the `stateAgainPromise` declaration and the `stateAgain`-producing line move from listening on the player's socket to requesting it from the host's.
+
+- [ ] **Step 4: Verify the existing e2e scenarios still pass**
+
+Run: `node test/e2e-botc.js` — expect Scenario 1's 10 PASS lines (with Step 3's fix applied) and Scenario 2's 4 PASS lines to print unchanged, then `ALL BOTC E2E SCENARIOS PASSED`, exit 0. (Scenario 2's disconnected-player-reclaims-seat check does not assert on the exact payload of anything this task removed, so it should be unaffected — confirm this by reading the actual PASS output, not by assumption.)
+
+- [ ] **Step 5: Add e2e coverage for this task's three changes**
 
 Read `test/e2e-botc.js` in full first to confirm current helper signatures (`connect`, `nextToken`, `createRoom`, `joinPlayers`, `once`, `assertTrue`) before writing new code that calls them — this plan's snapshot of them (below) matches the file as of the previous plan's merge, but confirm no drift.
 
@@ -566,11 +619,11 @@ Add a new Scenario 3 to `test/e2e-botc.js`, inserted after Scenario 2's `players
     players3.forEach((p) => p.socket.close());
 ```
 
-- [ ] **Step 5: Run it**
+- [ ] **Step 6: Run it**
 
-Run: `node test/e2e-botc.js` — expect Scenario 1 (10 PASS) + Scenario 2 (4 PASS) + Scenario 3 (2 PASS) + `ALL BOTC E2E SCENARIOS PASSED`, exit 0.
+Run: `node test/e2e-botc.js` — expect Scenario 1 (10 PASS, with Step 3's fix applied) + Scenario 2 (4 PASS) + Scenario 3 (2 PASS) + `ALL BOTC E2E SCENARIOS PASSED`, exit 0.
 
-- [ ] **Step 6: Full regression**
+- [ ] **Step 7: Full regression**
 
 Run:
 
@@ -581,7 +634,7 @@ node --test "test/*.test.js" \
   && node test/e2e-reconnect.js && node test/e2e-botc.js
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add games/botc/index.js test/e2e-botc.js
