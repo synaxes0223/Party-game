@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Party Game Platform — Host</title>
 <link rel="stylesheet" href="/host/style.css" />
+<link rel="stylesheet" href="/host/botc/botc.css" />
 </head>
 <body>
   <div id="app">
@@ -208,6 +209,60 @@
       <button id="btn-play-again" class="btn-primary">Back to Lobby</button>
     </section>
 
+    <section id="screen-botc-setup" class="screen">
+      <h2>Set up Blood on the Clocktower</h2>
+      <p class="subtitle"><span id="botc-player-count">0</span> players joined.</p>
+      <p id="botc-distribution-hint" class="hint"></p>
+
+      <h3>Seat order (adjacency matters)</h3>
+      <ol id="botc-seat-order-list" class="botc-seat-order-list"></ol>
+
+      <button type="button" id="btn-botc-random-deal" class="btn-primary">Deal Randomly</button>
+
+      <h3>Or assign manually</h3>
+      <div id="botc-manual-deal-rows" class="botc-manual-deal-rows"></div>
+      <button type="button" id="btn-botc-manual-deal" class="btn-secondary">Deal These Characters</button>
+
+      <p id="botc-setup-error" class="error"></p>
+    </section>
+
+    <section id="screen-botc-grimoire" class="screen">
+      <div class="botc-grimoire-header">
+        <h2 id="botc-phase-title">Blood on the Clocktower</h2>
+        <button type="button" id="btn-botc-cover" class="btn-secondary">🙈 Cover</button>
+      </div>
+
+      <div id="botc-ended-banner" class="botc-ended-banner" hidden></div>
+
+      <div id="botc-night-panel" class="botc-panel" hidden>
+        <h3 id="botc-night-step-title"></h3>
+        <div id="botc-night-candidate-area" class="botc-candidate-list"></div>
+        <div id="botc-night-choice-area" class="botc-target-grid"></div>
+        <button type="button" id="btn-botc-begin-night" class="btn-primary" hidden>
+          Begin Night <span id="botc-begin-night-number"></span>
+        </button>
+      </div>
+
+      <div id="botc-day-panel" class="botc-panel" hidden>
+        <div class="botc-nominate-row">
+          <select id="botc-nominator-select" class="input-field"></select>
+          <span>nominates</span>
+          <select id="botc-nominee-select" class="input-field"></select>
+          <button type="button" id="btn-botc-nominate" class="btn-secondary">Nominate</button>
+        </div>
+        <div id="botc-vote-tally" class="botc-vote-tally"></div>
+        <div id="botc-onblock" class="botc-onblock"></div>
+        <button type="button" id="btn-botc-execute" class="btn-primary" hidden>Execute</button>
+      </div>
+
+      <div id="botc-seat-list" class="botc-seat-list"></div>
+
+      <div id="botc-cover-screen" class="botc-cover-screen" hidden>
+        <p>Grimoire hidden.</p>
+        <button type="button" id="btn-botc-uncover" class="btn-primary">Reveal Grimoire</button>
+      </div>
+    </section>
+
   </div>
 
   <button id="btn-wheel-toggle" class="wheel-floating-btn">🎡 Wheel</button>
@@ -230,5 +285,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/shared/session.js"></script>
   <script src="/host/host.js"></script>
+  <script type="module" src="/host/botc/main.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 const socket = io();
+window.__hostSocket = socket;
 
 // The host tab lives on the phone that is also running the server, so Android
 // backgrounding it is routine. On every (re)connect, try to walk back into the
@@ -201,6 +202,8 @@ document.getElementById("btn-start-game").addEventListener("click", () => {
     enterWordSelect();
   } else if (selectedGameId === "avalon") {
     enterAvalonSetup();
+  } else if (selectedGameId === "botc") {
+    if (window.__botcEnterSetup) window.__botcEnterSetup(roomCode);
   } else {
     enterTrackSelect();
   }

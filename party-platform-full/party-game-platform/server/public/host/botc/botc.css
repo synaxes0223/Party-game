@@ -1,0 +1,207 @@
+/* botc.css
+   Reuses the CSS custom properties already declared by /host/style.css's
+   :root (both stylesheets apply to the same document, so --bg/--panel/
+   --accent/etc. are already in scope here -- no re-declaration needed). */
+
+.botc-panel {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.botc-grimoire-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.botc-seat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.botc-seat-row {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.botc-seat-row.dead {
+  opacity: 0.55;
+}
+
+.botc-seat-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.botc-seat-id {
+  color: var(--text-dim);
+  font-weight: 600;
+  width: 1.5em;
+}
+
+.botc-seat-nickname {
+  font-weight: 600;
+  flex: 1;
+}
+
+.botc-seat-character {
+  color: var(--text-dim);
+}
+
+.botc-seat-character.evil {
+  color: var(--accent);
+}
+
+.botc-seat-reminders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.botc-reminder-tag {
+  background: var(--accent2);
+  color: white;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.botc-reminder-tag button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.botc-seat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.botc-seat-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.botc-seat-order-list li {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.botc-manual-deal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.botc-manual-deal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botc-nominate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.botc-vote-tally {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.botc-vote-row {
+  display: flex;
+  justify-content: space-between;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+}
+
+.botc-vote-row.current-voter {
+  outline: 2px solid var(--accent);
+}
+
+.botc-onblock {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.botc-ended-banner {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.botc-cover-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 999;
+}
+
+.botc-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.botc-candidate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  gap: 8px;
+}
+
+.botc-target-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
