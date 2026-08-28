@@ -44,6 +44,10 @@ const CHARACTERS = {
     label: "Fortune Teller",
     hint: "Each night, choose 2 players: you learn if either registers as the Demon. One good player may register falsely to you.",
   },
+  virgin: {
+    label: "Virgin",
+    hint: "The first time you are nominated, if the nominator is a Townsfolk, they die instead of you.",
+  },
   butler: {
     label: "Butler",
     hint: "Each night, choose a player (not yourself). Tomorrow, you may only vote if they are voting too.",

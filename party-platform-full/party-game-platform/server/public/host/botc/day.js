@@ -88,6 +88,21 @@ function renderVoteTally() {
   }
 }
 
+function renderVirginPrompt() {
+  const state = store.latestState;
+  const box = document.getElementById("botc-virgin-prompt");
+  const pending = state && state.day && state.day.pendingVirgin;
+  if (!pending) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  document.getElementById("botc-virgin-prompt-text").textContent =
+    `${pending.nominatorNickname} nominated the Virgin (${pending.nomineeNickname}). ` +
+    `${pending.nominatorNickname} currently registers as a Townsfolk: ${pending.nominatorRegistersAsTownsfolk ? "YES" : "no"}. ` +
+    `Trigger the Virgin?`;
+}
+
 function renderOnBlockAndExecute() {
   const state = store.latestState;
   const onBlockEl = document.getElementById("botc-onblock");
@@ -140,6 +155,7 @@ function renderEndedBanner() {
 export function initDayPanel() {
   onStateChange(() => {
     renderDayPanel();
+    renderVirginPrompt();
     renderEndedBanner();
   });
 
@@ -147,5 +163,12 @@ export function initDayPanel() {
     const nominatorSeatId = Number(document.getElementById("botc-nominator-select").value);
     const nomineeSeatId = Number(document.getElementById("botc-nominee-select").value);
     store.socket.emit("host:botc-nominate", { code: store.roomCode, nominatorSeatId, nomineeSeatId });
+  });
+
+  document.getElementById("btn-botc-virgin-execute").addEventListener("click", () => {
+    store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: true, proceed: true });
+  });
+  document.getElementById("btn-botc-virgin-spare").addEventListener("click", () => {
+    store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: false, proceed: true });
   });
 }

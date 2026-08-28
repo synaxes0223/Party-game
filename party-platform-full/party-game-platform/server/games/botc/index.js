@@ -41,6 +41,11 @@ function publicNomination(nomination) {
   };
 }
 
+function nick(state, seatId) {
+  const s = stateModule.findSeatById(state, seatId);
+  return s ? s.nickname : null;
+}
+
 // Without this, the Storyteller (and this task's e2e test) has no way to
 // know whether the currently-active night step needs a player-driven
 // choice (host:botc-night-choice) or a candidate pick (host:botc-night-
@@ -86,6 +91,17 @@ function publicStateView(state) {
           nominationsReceived: state.day.nominationsReceived,
           currentNomination: publicNomination(state.day.currentNomination),
           onBlock: state.day.onBlock,
+          pendingVirgin: state.day.pendingVirgin
+            ? {
+                ...state.day.pendingVirgin,
+                nominatorNickname: nick(state, state.day.pendingVirgin.nominatorSeatId),
+                nomineeNickname: nick(state, state.day.pendingVirgin.nomineeSeatId),
+                nominatorRegistersAsTownsfolk:
+                  characters.teamOf(
+                    (stateModule.findSeatById(state, state.day.pendingVirgin.nominatorSeatId) || {}).characterId
+                  ) === "townsfolk",
+              }
+            : null,
         }
       : null,
     nightStep: publicNightStep(state),
@@ -387,8 +403,33 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-nominate", ({ code, nominatorSeatId, nomineeSeatId }) => {
     withHostRoom(code, (room) => {
       if (room.gameState.phase !== "day-discussion" || !room.gameState.day) return;
-      voting.startNomination(room.gameState, nominatorSeatId, nomineeSeatId);
-      maybePromptVoteTurn(room, io);
+      const result = voting.startNomination(room.gameState, nominatorSeatId, nomineeSeatId);
+      if (!result.virginTrigger) maybePromptVoteTurn(room, io);
+      emitState(room, io);
+    });
+  });
+
+  // The Storyteller's ruling on a Virgin nomination the engine paused on
+  // (state.day.pendingVirgin): whether the nominator is executed (execute)
+  // and whether the nomination then proceeds to a vote (proceed). Either
+  // way the Virgin's once-per-game ability is spent.
+  socket.on("host:botc-virgin-resolve", ({ code, execute, proceed }) => {
+    withHostRoom(code, (room) => {
+      const pending = room.gameState.day && room.gameState.day.pendingVirgin;
+      if (!pending) return;
+      const virginSeat = stateModule.findSeatById(room.gameState, pending.nomineeSeatId);
+      const nominatorSeat = stateModule.findSeatById(room.gameState, pending.nominatorSeatId);
+      if (virginSeat) require("./virgin").markUsed(room.gameState, virginSeat);
+
+      if (execute && nominatorSeat && nominatorSeat.alive) {
+        grimoire.setAlive(nominatorSeat, false);
+        applyWinCheckAndMaybeEnd(room, io, { executedSeatId: pending.nominatorSeatId });
+      }
+      if (proceed && room.gameState.phase !== "ended") {
+        voting.beginVoteFor(room.gameState, pending.nominatorSeatId, pending.nomineeSeatId);
+        maybePromptVoteTurn(room, io);
+      }
+      room.gameState.day.pendingVirgin = null;
       emitState(room, io);
     });
   });

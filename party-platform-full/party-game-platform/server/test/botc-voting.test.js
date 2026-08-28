@@ -158,3 +158,27 @@ test("a Butler's yes vote counts when their master also voted yes", () => {
   const result = voting.resolveNomination(s);
   assert.equal(result.votes, 2, "both the Butler's and the master's yes votes count");
 });
+
+test("nominating an unused Virgin pauses: no vote starts, pendingVirgin is set, nomination is recorded", () => {
+  const s = dealtState([
+    { nickname: "P1", characterId: "investigator" },
+    { nickname: "P2", characterId: "virgin" },
+    { nickname: "P3", characterId: "imp" },
+  ]);
+  const result = voting.startNomination(s, 1, 2);
+  assert.deepEqual(result, { virginTrigger: { nominatorSeatId: 1, nomineeSeatId: 2 } });
+  assert.equal(s.day.currentNomination, null, "no vote begins");
+  assert.deepEqual(s.day.pendingVirgin, { nominatorSeatId: 1, nomineeSeatId: 2 });
+  assert.ok(s.day.nominationsMade.includes(1) && s.day.nominationsReceived.includes(2));
+});
+
+test("startNomination with skipVirgin begins the vote normally", () => {
+  const s = dealtState([
+    { nickname: "P1", characterId: "investigator" },
+    { nickname: "P2", characterId: "virgin" },
+    { nickname: "P3", characterId: "imp" },
+  ]);
+  const result = voting.startNomination(s, 1, 2, { skipVirgin: true });
+  assert.deepEqual(result, {});
+  assert.ok(s.day.currentNomination, "the vote started");
+});

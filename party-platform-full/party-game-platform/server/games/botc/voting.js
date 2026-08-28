@@ -7,6 +7,7 @@
 // Butler's master has voted yet (see votingjs's effectiveVoteCount).
 
 const stateModule = require("./state");
+const virgin = require("./virgin");
 
 function startDay(state) {
   state.day = {
@@ -14,6 +15,7 @@ function startDay(state) {
     nominationsReceived: [],
     currentNomination: null,
     onBlock: null,
+    pendingVirgin: null,
   };
 }
 
@@ -32,7 +34,17 @@ function votingOrderStartingLeftOf(state, nomineeSeatId) {
   return order;
 }
 
-function startNomination(state, nominatorSeatId, nomineeSeatId) {
+function beginVoteFor(state, nominatorSeatId, nomineeSeatId) {
+  state.day.currentNomination = {
+    nominatorSeatId,
+    nomineeSeatId,
+    order: votingOrderStartingLeftOf(state, nomineeSeatId),
+    currentVoterIndex: 0,
+    votes: new Map(),
+  };
+}
+
+function startNomination(state, nominatorSeatId, nomineeSeatId, opts = {}) {
   if (state.day.nominationsMade.includes(nominatorSeatId)) {
     return { error: "This player has already nominated today." };
   }
@@ -41,13 +53,14 @@ function startNomination(state, nominatorSeatId, nomineeSeatId) {
   }
   state.day.nominationsMade.push(nominatorSeatId);
   state.day.nominationsReceived.push(nomineeSeatId);
-  state.day.currentNomination = {
-    nominatorSeatId,
-    nomineeSeatId,
-    order: votingOrderStartingLeftOf(state, nomineeSeatId),
-    currentVoterIndex: 0,
-    votes: new Map(),
-  };
+
+  const nominee = stateModule.findSeatById(state, nomineeSeatId);
+  if (!opts.skipVirgin && nominee && virgin.isUnusedVirgin(nominee)) {
+    state.day.pendingVirgin = { nominatorSeatId, nomineeSeatId };
+    return { virginTrigger: { nominatorSeatId, nomineeSeatId } };
+  }
+
+  beginVoteFor(state, nominatorSeatId, nomineeSeatId);
   return {};
 }
 
@@ -108,4 +121,4 @@ function resolveNomination(state) {
   return { onBlock: onBlock ? onBlock.seatId : null, votes };
 }
 
-module.exports = { startDay, startNomination, requiredVotes, castVote, resolveNomination };
+module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, resolveNomination };
