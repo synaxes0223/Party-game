@@ -13,6 +13,7 @@ const TEAM_OF = {
   librarian: "townsfolk",
   monk: "townsfolk",
   butler: "outsider",
+  drunk: "outsider",
   poisoner: "minion",
   baron: "minion",
   imp: "demon",
@@ -44,6 +45,7 @@ function getModule(characterId) {
       monk: require("./monk"),
       poisoner: require("./poisoner"),
       butler: require("./butler"),
+      drunk: require("./drunk"),
       imp: require("./imp"),
       baron: require("./baron"),
     };

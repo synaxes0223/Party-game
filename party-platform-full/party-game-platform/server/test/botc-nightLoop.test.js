@@ -141,3 +141,26 @@ test("submitChoice on the Fortune Teller keeps the same step active as a reveal"
   const next = nightLoop.currentStep(s);
   assert.ok(!next || next.stepId !== "fortuneTeller", "picking a candidate advances past the Fortune Teller");
 });
+
+test("a Drunk who believes they are the Empath is scheduled on the Empath's step", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2, 3].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  dealing.dealManual(s, [
+    { seatId: 1, characterId: "drunk", believedCharacterId: "empath" },
+    { seatId: 2, characterId: "imp" },
+    { seatId: 3, characterId: "poisoner" },
+  ]);
+  nightLoop.startNight(s);
+  // walk to the empath step
+  let steps = 0;
+  while (s.phase === "night" && steps < 12) {
+    const step = nightLoop.currentStep(s);
+    if (step && step.stepId === "empath") {
+      assert.equal(step.seat.seatId, 1, "the Drunk seat is the one woken for the Empath step");
+      return;
+    }
+    nightLoop.advance(s);
+    steps++;
+  }
+  throw new Error("empath step was never scheduled for the Drunk");
+});

@@ -86,6 +86,15 @@ function setAlive(seat, alive) {
   seat.alive = alive;
 }
 
+// The Drunk must never go through setCharacter, which force-syncs
+// believedCharacterId = characterId and would erase the split identity that
+// isImpaired and nightLoop scheduling both depend on.
+function setDrunk(seat, believedCharacterId) {
+  seat.characterId = "drunk";
+  seat.believedCharacterId = believedCharacterId;
+  seat.alignment = "good";
+}
+
 module.exports = {
   isPoisoned,
   isImpaired,
@@ -98,4 +107,5 @@ module.exports = {
   reorderSeats,
   setCharacter,
   setAlive,
+  setDrunk,
 };

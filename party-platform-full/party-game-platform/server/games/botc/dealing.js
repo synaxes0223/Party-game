@@ -17,15 +17,21 @@ function dealManual(state, assignments) {
   // Validate everything before mutating anything, so a bad entry never
   // leaves a partially-dealt room.
   const resolved = [];
-  for (const { seatId, characterId } of assignments) {
+  for (const { seatId, characterId, believedCharacterId } of assignments) {
     const seat = stateModule.findSeatById(state, seatId);
     if (!seat) return { error: `Unknown seat id: ${seatId}` };
     const team = characters.teamOf(characterId);
     if (!team) return { error: `Unknown character id: ${characterId}` };
-    resolved.push({ seat, characterId, team });
+    if (characterId === "drunk") {
+      if (!believedCharacterId || characters.teamOf(believedCharacterId) !== "townsfolk") {
+        return { error: `The Drunk needs a believed Townsfolk (got ${believedCharacterId || "none"}).` };
+      }
+    }
+    resolved.push({ seat, characterId, team, believedCharacterId });
   }
-  for (const { seat, characterId, team } of resolved) {
-    grimoire.setCharacter(seat, characterId, alignmentForTeam(team));
+  for (const { seat, characterId, team, believedCharacterId } of resolved) {
+    if (characterId === "drunk") grimoire.setDrunk(seat, believedCharacterId);
+    else grimoire.setCharacter(seat, characterId, alignmentForTeam(team));
   }
   return {};
 }
@@ -55,7 +61,15 @@ function dealRandom(state, characterCounts) {
   }
 
   const shuffledPool = shuffle(pool);
-  const assignments = state.seats.map((seat, i) => ({ seatId: seat.seatId, characterId: shuffledPool[i] }));
+  const dealtIds = new Set(shuffledPool);
+  const townsfolkNotInPlay = characters.charactersOfTeam("townsfolk").filter((id) => !dealtIds.has(id));
+  const believedPool = townsfolkNotInPlay.length ? townsfolkNotInPlay : characters.charactersOfTeam("townsfolk");
+  const assignments = state.seats.map((seat, i) => {
+    const characterId = shuffledPool[i];
+    if (characterId !== "drunk") return { seatId: seat.seatId, characterId };
+    const believedCharacterId = believedPool[Math.floor(Math.random() * believedPool.length)];
+    return { seatId: seat.seatId, characterId, believedCharacterId };
+  });
   return dealManual(state, assignments);
 }
 
