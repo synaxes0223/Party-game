@@ -65,3 +65,7 @@
   text-align: center;
   margin-bottom: 8px;
 }
+
+.botc-picked {
+  outline: 2px solid var(--accent, #4caf50);
+}

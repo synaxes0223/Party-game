@@ -11,8 +11,13 @@ const STEP_LABEL = {
   "minion-info": "Minion learns the Demon",
   "demon-info": "Demon learns their Minion(s) and bluffs",
   washerwoman: "Washerwoman",
+  librarian: "Librarian",
+  investigator: "Investigator",
+  chef: "Chef",
   empath: "Empath",
   soldier: "Soldier",
+  monk: "Monk",
+  fortuneTeller: "Fortune Teller",
   butler: "Butler",
   poisoner: "Poisoner",
   baron: "Baron",
@@ -84,10 +89,41 @@ function renderChoiceOverride(step) {
   area.innerHTML = "";
   if (!step || !step.requiresChoice) return;
 
-  const state = store.latestState;
-  const excludeSelf = step.requiresChoice.type === "select-one-player-excluding-self";
-  const targets = state.seats.filter((s) => !excludeSelf || s.seatId !== step.seatId);
+  const stateNow = store.latestState;
+  const type = step.requiresChoice.type;
 
+  if (type === "select-two-players") {
+    const picked = new Set();
+    const submit = document.createElement("button");
+    submit.type = "button";
+    submit.className = "btn-secondary";
+    submit.disabled = true;
+    submit.textContent = "Submit 2 players";
+    submit.addEventListener("click", () => {
+      store.socket.emit("host:botc-night-choice", {
+        code: store.roomCode,
+        choice: { targetSeatIds: [...picked] },
+      });
+    });
+    stateNow.seats.forEach((s) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-secondary";
+      btn.textContent = s.nickname + (s.alive ? "" : " (dead)");
+      btn.addEventListener("click", () => {
+        if (picked.has(s.seatId)) picked.delete(s.seatId);
+        else if (picked.size < 2) picked.add(s.seatId);
+        btn.classList.toggle("botc-picked", picked.has(s.seatId));
+        submit.disabled = picked.size !== 2;
+      });
+      area.appendChild(btn);
+    });
+    area.appendChild(submit);
+    return;
+  }
+
+  const excludeSelf = type === "select-one-player-excluding-self";
+  const targets = stateNow.seats.filter((s) => !excludeSelf || s.seatId !== step.seatId);
   targets.forEach((s) => {
     const btn = document.createElement("button");
     btn.type = "button";

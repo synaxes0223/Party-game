@@ -15,13 +15,46 @@ import { store } from "./store.js";
 import { showBotcScreen } from "./main.js";
 
 function renderNightChoice({ choiceType, targets }) {
-  document.getElementById("botc-night-choice-status").textContent =
-    choiceType === "select-one-player-excluding-self"
-      ? "Choose a player (not yourself)."
-      : "Choose a player.";
-
+  const statusEl = document.getElementById("botc-night-choice-status");
   const container = document.getElementById("botc-night-choice-targets");
   container.innerHTML = "";
+
+  if (choiceType === "select-two-players") {
+    statusEl.textContent = "Choose two players.";
+    const picked = new Set();
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.className = "vote-btn";
+    confirm.disabled = true;
+    confirm.textContent = "Confirm 2";
+    confirm.addEventListener("click", () => {
+      container.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      statusEl.textContent = "Choice submitted — waiting…";
+      store.socket.emit("player:botc-night-choice", {
+        code: store.roomCode,
+        choice: { targetSeatIds: [...picked] },
+      });
+    });
+    targets.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vote-btn";
+      btn.textContent = t.nickname + (t.alive ? "" : " (dead)");
+      btn.addEventListener("click", () => {
+        if (picked.has(t.seatId)) picked.delete(t.seatId);
+        else if (picked.size < 2) picked.add(t.seatId);
+        btn.classList.toggle("botc-picked", picked.has(t.seatId));
+        confirm.disabled = picked.size !== 2;
+      });
+      container.appendChild(btn);
+    });
+    container.appendChild(confirm);
+    showBotcScreen("nightChoice");
+    return;
+  }
+
+  statusEl.textContent =
+    choiceType === "select-one-player-excluding-self" ? "Choose a player (not yourself)." : "Choose a player.";
   targets.forEach((t) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -29,15 +62,11 @@ function renderNightChoice({ choiceType, targets }) {
     btn.textContent = t.nickname + (t.alive ? "" : " (dead)");
     btn.addEventListener("click", () => {
       container.querySelectorAll("button").forEach((b) => (b.disabled = true));
-      document.getElementById("botc-night-choice-status").textContent = "Choice submitted — waiting…";
-      store.socket.emit("player:botc-night-choice", {
-        code: store.roomCode,
-        choice: { targetSeatId: t.seatId },
-      });
+      statusEl.textContent = "Choice submitted — waiting…";
+      store.socket.emit("player:botc-night-choice", { code: store.roomCode, choice: { targetSeatId: t.seatId } });
     });
     container.appendChild(btn);
   });
-
   showBotcScreen("nightChoice");
 }
 
