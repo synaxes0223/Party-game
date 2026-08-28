@@ -10,11 +10,11 @@ function seededState(names) {
   return s;
 }
 
-test("teamOf and charactersOfTeam reflect the seven-character registry", () => {
+test("teamOf and charactersOfTeam reflect the ten-character registry", () => {
   assert.equal(characters.teamOf("imp"), "demon");
   assert.equal(characters.teamOf("washerwoman"), "townsfolk");
   assert.equal(characters.teamOf("no-such-character"), null);
-  assert.deepEqual(characters.charactersOfTeam("townsfolk").sort(), ["empath", "soldier", "washerwoman"]);
+  assert.deepEqual(characters.charactersOfTeam("townsfolk").sort(), ["chef", "empath", "investigator", "librarian", "soldier", "washerwoman"]);
   assert.deepEqual(characters.charactersOfTeam("minion").sort(), ["baron", "poisoner"]);
 });
 
