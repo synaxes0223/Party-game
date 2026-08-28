@@ -56,3 +56,11 @@ test("evil wins on exact parity, not only when outnumbering good", () => {
   const result = winConditions.checkWinCondition(s);
   assert.equal(result.winner, "evil");
 });
+
+test("checkWinCondition still works with no context argument", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  dealing.dealManual(s, [{ seatId: 1, characterId: "empath" }, { seatId: 2, characterId: "imp" }]);
+  // demon alive, 1 good vs 1 evil -> evil parity
+  assert.equal(winConditions.checkWinCondition(s).winner, "evil");
+});

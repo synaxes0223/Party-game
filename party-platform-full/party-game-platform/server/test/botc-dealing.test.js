@@ -74,8 +74,8 @@ test("dealRandom deals exactly the requested character counts, using only this p
 
 test("dealRandom errors when a requested team count exceeds this plan's character pool for that team", () => {
   const s = seededState(["p1", "p2", "p3", "p4", "p5"]);
-  // only 2 Outsiders (Butler, Drunk) exist in this plan's registry; asking for 3 must fail
-  const result = dealing.dealRandom(s, { townsfolk: 0, outsiders: 3, minions: 1, demon: 1 });
+  // only 3 Outsiders (Butler, Drunk, Saint) exist in this plan's registry; asking for 4 must fail
+  const result = dealing.dealRandom(s, { townsfolk: 0, outsiders: 4, minions: 0, demon: 1 });
   assert.equal(typeof result.error, "string");
 });
 

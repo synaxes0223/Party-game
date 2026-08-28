@@ -97,8 +97,8 @@ function emitState(room, io) {
   io.to(room.hostId).emit("host:botc-state", { state: publicStateView(room.gameState) });
 }
 
-function applyWinCheckAndMaybeEnd(room, io) {
-  const verdict = winConditions.checkWinCondition(room.gameState);
+function applyWinCheckAndMaybeEnd(room, io, context = {}) {
+  const verdict = winConditions.checkWinCondition(room.gameState, context);
   if (verdict) {
     room.gameState.ended = verdict;
     room.gameState.phase = "ended";
@@ -413,8 +413,9 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-execute", ({ code, seatId }) => {
     withHostRoom(code, (room) => {
       const seat = stateModule.findSeatById(room.gameState, seatId);
+      const wasAlive = seat && seat.alive;
       if (seat) grimoire.setAlive(seat, false);
-      applyWinCheckAndMaybeEnd(room, io);
+      applyWinCheckAndMaybeEnd(room, io, wasAlive ? { executedSeatId: seatId } : {});
       emitState(room, io);
     });
   });

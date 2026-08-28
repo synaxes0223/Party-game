@@ -9,7 +9,14 @@
 const stateModule = require("./state");
 const characters = require("./characters");
 
-function checkWinCondition(state) {
+function checkWinCondition(state, context = {}) {
+  if (context.executedSeatId != null) {
+    const executed = stateModule.findSeatById(state, context.executedSeatId);
+    if (executed && executed.characterId === "saint" && executed.alignment === "good") {
+      return { winner: "evil", reason: "The Saint was executed." };
+    }
+  }
+
   const alive = stateModule.aliveSeats(state);
   const demonAlive = alive.some((seat) => characters.teamOf(seat.characterId) === "demon");
   if (!demonAlive) {

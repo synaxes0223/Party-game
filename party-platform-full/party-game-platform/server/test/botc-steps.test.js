@@ -57,11 +57,12 @@ test("demon-info reveals the sole Minion plus exactly three not-in-play good blu
 
 test("demon-info degrades safely to fewer than 3 bluffs when all implemented good characters are dealt", () => {
   // 11-player game: all 8 townsfolk + butler + poisoner minion + imp demon.
-  // This slice implements 10 good characters (washerwoman, empath,
+  // This slice implements 11 good characters (washerwoman, empath,
   // fortuneTeller, soldier, chef, investigator, librarian, monk, butler,
-  // drunk); dealing every one but the Drunk leaves only the Drunk for bluffs
-  // -- an accepted limitation, not a bug. This proves the shortfall is handled safely (no
-  // throw, no wraparound to dealt/duplicate ids) rather than just asserting it.
+  // drunk, saint); dealing every one but the Drunk and the Saint leaves only
+  // those two for bluffs -- an accepted limitation, not a bug. This proves the
+  // shortfall is handled safely (no throw, no wraparound to dealt/duplicate
+  // ids) rather than just asserting it.
   const s = dealtState([
     { nickname: "Alice", characterId: "washerwoman" },
     { nickname: "Bob", characterId: "empath" },
@@ -79,9 +80,9 @@ test("demon-info degrades safely to fewer than 3 bluffs when all implemented goo
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].payload.minion.characterId, "poisoner");
   assert.ok(candidates[0].payload.bluffs.length < 3);
-  // Every implemented good character except the Drunk is dealt here, so the
-  // Drunk is the only remaining bluff.
-  assert.deepEqual(candidates[0].payload.bluffs, ["drunk"]);
+  // Every implemented good character except the Drunk and the Saint is dealt
+  // here, so those two are the only remaining bluffs.
+  assert.deepEqual([...candidates[0].payload.bluffs].sort(), ["drunk", "saint"]);
 });
 
 test("renderForPlayer for demon-info names the minion and lists the bluffs", () => {
