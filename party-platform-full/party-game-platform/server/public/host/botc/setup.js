@@ -57,6 +57,7 @@ function renderSeatOrderList() {
     upBtn.addEventListener("click", () => {
       [orderedPlayerIds[index - 1], orderedPlayerIds[index]] = [orderedPlayerIds[index], orderedPlayerIds[index - 1]];
       renderSeatOrderList();
+      renderManualDealRows();
     });
 
     const downBtn = document.createElement("button");
@@ -67,6 +68,7 @@ function renderSeatOrderList() {
     downBtn.addEventListener("click", () => {
       [orderedPlayerIds[index + 1], orderedPlayerIds[index]] = [orderedPlayerIds[index], orderedPlayerIds[index + 1]];
       renderSeatOrderList();
+      renderManualDealRows();
     });
 
     controls.appendChild(upBtn);
@@ -122,13 +124,19 @@ export function initSetup() {
     document.getElementById("botc-setup-error").textContent = "";
     const selects = document.querySelectorAll("#botc-manual-deal-rows select");
     const assignments = [];
-    for (let i = 0; i < orderedPlayerIds.length; i++) {
-      const characterId = selects[i].value;
+    for (const select of selects) {
+      // Resolve this select's seat from its own player id against the
+      // CURRENT orderedPlayerIds, rather than trusting DOM position to
+      // still match array position -- defense-in-depth against the
+      // manual-deal rows ever going stale relative to a reorder again.
+      const playerId = select.dataset.playerId;
+      const seatId = orderedPlayerIds.indexOf(playerId) + 1;
+      const characterId = select.value;
       if (!characterId) {
         document.getElementById("botc-setup-error").textContent = "Assign a character to every seat before dealing manually.";
         return;
       }
-      assignments.push({ seatId: i + 1, characterId });
+      assignments.push({ seatId, characterId });
     }
     store.socket.emit("host:botc-manual-deal", { code: store.roomCode, assignments, seatOrder: orderedPlayerIds });
   });
