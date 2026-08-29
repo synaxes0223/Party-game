@@ -92,3 +92,10 @@ test("nextReminderId increments per-state, not globally", () => {
   assert.equal(state.nextReminderId(a), 2);
   assert.equal(state.nextReminderId(b), 1); // b's counter is independent of a's
 });
+
+test("appendInfoLog pushes a structured entry", () => {
+  const s = state.createInitialState();
+  state.appendInfoLog(s, { night: 1, seatId: 3, characterId: "empath", text: "1 evil neighbour", truthful: true });
+  assert.equal(s.infoLog.length, 1);
+  assert.deepEqual(s.infoLog[0], { night: 1, seatId: 3, characterId: "empath", text: "1 evil neighbour", truthful: true });
+});

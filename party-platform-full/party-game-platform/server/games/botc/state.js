@@ -91,6 +91,19 @@ function aliveNeighborsOf(state, seatId) {
   return { left, right };
 }
 
+// Every reveal the Storyteller sends is logged per seat so the grimoire can
+// show what each player has been told -- their most common mistake is
+// contradicting earlier information.
+function appendInfoLog(state, entry) {
+  state.infoLog.push({
+    night: entry.night,
+    seatId: entry.seatId,
+    characterId: entry.characterId,
+    text: entry.text,
+    truthful: entry.truthful,
+  });
+}
+
 // A module-level counter would leak reminder ids across every room in this
 // process; keeping the counter on state itself scopes it correctly per room.
 function nextReminderId(state) {
@@ -108,4 +121,5 @@ module.exports = {
   physicalNeighborsOf,
   aliveNeighborsOf,
   nextReminderId,
+  appendInfoLog,
 };

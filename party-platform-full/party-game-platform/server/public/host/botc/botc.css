@@ -249,3 +249,16 @@
 .botc-picked {
   outline: 2px solid var(--accent, #4caf50);
 }
+
+.botc-infolog {
+  margin-top: 16px;
+}
+
+.botc-infolog-group {
+  margin: 8px 0;
+}
+
+.botc-infolog-row {
+  font-size: 0.9em;
+  opacity: 0.85;
+}

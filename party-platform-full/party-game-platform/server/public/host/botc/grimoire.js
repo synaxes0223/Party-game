@@ -126,6 +126,38 @@ function renderSeatList() {
   state.seats.forEach((seat, index) => container.appendChild(renderSeatRow(seat, index + 1)));
 }
 
+// The Storyteller's running record of every reveal sent to each seat, so
+// they don't contradict themselves. Grouped by seat, newest-in-order within
+// each seat, with a truth marker (a bluff the ST deliberately fed a player
+// is logged as untruthful).
+function renderInfoLog() {
+  const state = store.latestState;
+  const body = document.getElementById("botc-infolog-body");
+  body.innerHTML = "";
+  if (!state || !state.infoLog || state.infoLog.length === 0) {
+    body.textContent = "No information sent yet.";
+    return;
+  }
+  const bySeat = new Map();
+  state.infoLog.forEach((e) => {
+    if (!bySeat.has(e.seatId)) bySeat.set(e.seatId, []);
+    bySeat.get(e.seatId).push(e);
+  });
+  for (const [seatId, entries] of bySeat) {
+    const seat = state.seats.find((s) => s.seatId === seatId);
+    const group = document.createElement("div");
+    group.className = "botc-infolog-group";
+    group.innerHTML = `<strong>${seat ? seat.nickname : "Seat " + seatId}</strong>`;
+    entries.forEach((e) => {
+      const row = document.createElement("div");
+      row.className = "botc-infolog-row";
+      row.textContent = `N${e.night} ${e.truthful ? "✅" : "❌"} — ${e.text}`;
+      group.appendChild(row);
+    });
+    body.appendChild(group);
+  }
+}
+
 // Event delegation on the container -- rows are fully re-rendered on every
 // state update, so listeners attached directly to row elements would need
 // re-attaching every time; delegating to the stable container avoids that.
@@ -195,7 +227,10 @@ function wireCoverButton() {
 }
 
 export function initGrimoire() {
-  onStateChange(() => renderSeatList());
+  onStateChange(() => {
+    renderSeatList();
+    renderInfoLog();
+  });
   wireSeatListDelegation();
   wireCoverButton();
 }

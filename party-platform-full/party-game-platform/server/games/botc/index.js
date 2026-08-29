@@ -120,6 +120,7 @@ function publicStateView(state) {
         }
       : null,
     nightStep: publicNightStep(state),
+    infoLog: state.infoLog,
     ended: state.ended,
   };
 }
@@ -450,8 +451,17 @@ function attach(io, socket, ctx) {
         const module = characters.getModuleForStep(step.stepId);
         const text = module.renderForPlayer(result.chosenCandidate.payload);
         // Verbal: the Storyteller reads this reveal aloud, so don't push it
-        // to the player's phone.
-        if (text && !verbal) io.to(step.seat.playerToken).emit("game:botc-info", { text });
+        // to the player's phone -- but still log it, since the reveal was made.
+        if (text) {
+          stateModule.appendInfoLog(room.gameState, {
+            night: room.gameState.dayNumber,
+            seatId: step.seat.seatId,
+            characterId: step.stepId,
+            text,
+            truthful: !!result.chosenCandidate.truthful,
+          });
+          if (!verbal) io.to(step.seat.playerToken).emit("game:botc-info", { text });
+        }
       }
       maybeEndNight(room);
       maybePromptNightChoice(room, io);
