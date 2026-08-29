@@ -85,6 +85,17 @@ function castVote(state, seatId, voted) {
   return {};
 }
 
+// Advance past the current voter without recording a vote -- for the
+// Storyteller's "skip current voter" and for the auto-pass timer when the
+// seat cannot vote at all (a dead player whose ghost vote is already spent,
+// which castVote rejects without advancing). Every real vote still goes
+// through castVote.
+function forceSkipVoter(state) {
+  const nom = state.day && state.day.currentNomination;
+  if (!nom) return;
+  nom.currentVoterIndex += 1;
+}
+
 // A Butler's yes vote only counts if their chosen master also voted yes on
 // this same nomination -- checked at tally time so voting order never has
 // to wait on the master's turn.
@@ -123,4 +134,4 @@ function resolveNomination(state) {
   return { onBlock: onBlock ? onBlock.seatId : null, votes };
 }
 
-module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, resolveNomination };
+module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, forceSkipVoter, resolveNomination };

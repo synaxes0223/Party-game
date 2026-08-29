@@ -167,6 +167,14 @@
   margin: 8px 0;
 }
 
+.botc-vote-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
 .botc-vote-tally {
   display: flex;
   flex-direction: column;

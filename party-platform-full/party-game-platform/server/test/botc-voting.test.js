@@ -182,3 +182,34 @@ test("startNomination with skipVirgin begins the vote normally", () => {
   assert.deepEqual(result, {});
   assert.ok(s.day.currentNomination, "the vote started");
 });
+
+test("forceSkipVoter advances the voter index without recording a vote", () => {
+  const s = sevenSeatGame();
+  voting.startNomination(s, 4, 3);
+  const before = s.day.currentNomination.currentVoterIndex;
+  const sizeBefore = s.day.currentNomination.votes.size;
+  voting.forceSkipVoter(s);
+  assert.equal(s.day.currentNomination.currentVoterIndex, before + 1);
+  assert.equal(s.day.currentNomination.votes.size, sizeBefore, "no vote recorded");
+});
+
+test("a dead voter whose ghost vote is spent is rejected by castVote but forceSkipVoter moves past them", () => {
+  const s = sevenSeatGame();
+  // seat 1 is dead and has already spent its one ghost vote
+  s.seats[0].alive = false;
+  s.seats[0].usedDeadVote = true;
+  voting.startNomination(s, 3, 2); // order runs ...seat 1... eventually
+  // fast-forward the index to seat 1's turn
+  const nom = s.day.currentNomination;
+  nom.currentVoterIndex = nom.order.indexOf(1);
+  const r = voting.castVote(s, 1, false);
+  assert.ok(r && r.error, "castVote rejects the spent ghost vote without advancing");
+  assert.equal(nom.currentVoterIndex, nom.order.indexOf(1), "index did not advance");
+  voting.forceSkipVoter(s);
+  assert.equal(nom.currentVoterIndex, nom.order.indexOf(1) + 1, "forceSkipVoter stepped past");
+});
+
+test("forceSkipVoter is a no-op when there is no current nomination", () => {
+  const s = sevenSeatGame();
+  assert.doesNotThrow(() => voting.forceSkipVoter(s));
+});

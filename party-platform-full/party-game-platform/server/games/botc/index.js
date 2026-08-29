@@ -132,6 +132,7 @@ function applyWinCheckAndMaybeEnd(room, io, context = {}) {
     room.gameState.ended = verdict;
     room.gameState.phase = "ended";
     room.state = "results";
+    clearVoteTimer(room); // no vote survives the game ending
     io.in(room.code).emit("game:botc-ended", verdict);
   }
 }
@@ -190,7 +191,10 @@ function maybePromptVoteTurn(room, io) {
       room.botcVoteTimer = null;
       const cur = st.day && st.day.currentNomination;
       if (!cur || cur.order[cur.currentVoterIndex] !== voterSeatId) return; // already voted
-      voting.castVote(st, voterSeatId, false);
+      const r = voting.castVote(st, voterSeatId, false);
+      // A dead seat whose ghost vote is spent can't be recorded -- castVote
+      // rejects it without advancing, so step past it or the timer spins.
+      if (r && r.error) voting.forceSkipVoter(st);
       maybePromptVoteTurn(room, io);
       emitState(room, io);
     }, ms);
@@ -263,6 +267,7 @@ function attach(io, socket, ctx) {
       return;
     }
 
+    clearVoteTimer(room); // a re-deal without a reset must not orphan a timer
     room.gameId = meta.id;
     room.gameState = state;
     room.state = "in-progress";
@@ -293,6 +298,7 @@ function attach(io, socket, ctx) {
       return;
     }
 
+    clearVoteTimer(room); // a re-deal without a reset must not orphan a timer
     room.gameId = meta.id;
     room.gameState = state;
     room.state = "in-progress";
@@ -573,7 +579,8 @@ function attach(io, socket, ctx) {
       if (!nom) return;
       const voterSeatId = nom.order[nom.currentVoterIndex];
       if (voterSeatId === undefined) return;
-      voting.castVote(room.gameState, voterSeatId, false);
+      const r = voting.castVote(room.gameState, voterSeatId, false);
+      if (r && r.error) voting.forceSkipVoter(room.gameState);
       maybePromptVoteTurn(room, io);
       emitState(room, io);
     });
