@@ -213,3 +213,30 @@ test("forceSkipVoter is a no-op when there is no current nomination", () => {
   const s = sevenSeatGame();
   assert.doesNotThrow(() => voting.forceSkipVoter(s));
 });
+
+test("advancePastIneligibleVoters steps over a run of dead spent-ghost seats to the next real voter", () => {
+  const s = sevenSeatGame();
+  // seats 1 and 2 are dead with their ghost votes already spent
+  s.seats[0].alive = false;
+  s.seats[0].usedDeadVote = true;
+  s.seats[1].alive = false;
+  s.seats[1].usedDeadVote = true;
+  voting.startNomination(s, 3, 7); // order = [1, 2, 3, 4, 5, 6, 7]
+  const nom = s.day.currentNomination;
+  assert.equal(nom.order[nom.currentVoterIndex], 1);
+  voting.advancePastIneligibleVoters(s);
+  assert.equal(nom.order[nom.currentVoterIndex], 3, "skipped seats 1 and 2, landed on seat 3");
+});
+
+test("advancePastIneligibleVoters leaves a live voter alone, and a dead voter who still has their ghost vote", () => {
+  const s = sevenSeatGame();
+  s.seats[0].alive = false; // dead but ghost vote NOT yet spent -> still eligible
+  voting.startNomination(s, 3, 7);
+  voting.advancePastIneligibleVoters(s);
+  assert.equal(s.day.currentNomination.order[s.day.currentNomination.currentVoterIndex], 1, "an unspent ghost is not skipped");
+});
+
+test("advancePastIneligibleVoters is a no-op with no nomination", () => {
+  const s = sevenSeatGame();
+  assert.doesNotThrow(() => voting.advancePastIneligibleVoters(s));
+});

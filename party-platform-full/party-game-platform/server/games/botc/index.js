@@ -173,12 +173,14 @@ function maybePromptNightChoice(room, io) {
 // context needed to decide (who's nominated) -- matching
 // maybePromptNightChoice's same "lights up one phone" design.
 // nomination.currentVoterIndex is voting.js's own single source of truth
-// for whose turn it is; this only reads it, never advances it.
+// for whose turn it is; this only reads it (and fast-forwards past seats
+// that can never cast a vote -- see advancePastIneligibleVoters).
 function maybePromptVoteTurn(room, io) {
   clearVoteTimer(room);
   const st = room.gameState;
   const nomination = st.day && st.day.currentNomination;
   if (!nomination) return;
+  voting.advancePastIneligibleVoters(st);
   const voterSeatId = nomination.order[nomination.currentVoterIndex];
   if (voterSeatId === undefined) return; // every seat in this nomination has already voted
   const voterSeat = stateModule.findSeatById(st, voterSeatId);
@@ -664,11 +666,17 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-begin-night", ({ code }) => {
     withHostRoom(code, (room) => {
       if (room.gameState.phase === "ended") return;
-      // A nomination + armed vote timer may still be live if the Storyteller
-      // clicks "Begin Night" mid-vote -- drop both so the timer can't fire
-      // (and cascade phone prompts) during the night that follows.
+      // A nomination + armed vote timer, or an unanswered Virgin/Slayer
+      // prompt, may still be live if the Storyteller clicks "Begin Night"
+      // mid-day -- drop them all so nothing stale carries into the night
+      // (the timer must not fire and cascade phone prompts; the prompts
+      // must not reappear on the grimoire come day 2).
       clearVoteTimer(room);
-      if (room.gameState.day) room.gameState.day.currentNomination = null;
+      if (room.gameState.day) {
+        room.gameState.day.currentNomination = null;
+        room.gameState.day.pendingVirgin = null;
+        room.gameState.day.pendingSlayer = null;
+      }
       nightLoop.startNight(room.gameState);
       maybePromptNightChoice(room, io);
       emitState(room, io);

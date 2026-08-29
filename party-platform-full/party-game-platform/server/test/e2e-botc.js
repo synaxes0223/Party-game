@@ -290,27 +290,28 @@ async function scenario7_secondDay() {
   });
   assertTrue(state.phase === "day-discussion", "reached day 1");
 
-  // ---- Day 1: set custom vote timer + global verbal mode ----
+  // ---- Day 1: a SHORT, genuinely-armed vote timer (verbal OFF so it arms) ----
   let s2 = once(host, "host:botc-state");
-  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 5000 });
+  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 300 });
   state = (await s2).state;
-  assertTrue(state.day.voteTimerMs === 5000, "vote timer set to 5000ms on day 1");
+  assertTrue(state.day.voteTimerMs === 300, "vote timer set to 300ms on day 1");
 
-  s2 = once(host, "host:botc-state");
-  host.emit("host:botc-set-verbal", { code: roomCode, verbal: true });
-  state = (await s2).state;
-  assertTrue(state.day.verbalMode === true, "global verbal mode enabled on day 1");
-
-  // ---- Open a nomination (seat 3 -> seat 4, NOT the Virgin) ----
+  // ---- Open a nomination (seat 3 -> seat 4, NOT the Virgin) -> the 300ms
+  //      timer is armed for the first voter (seat 5). ----
   s2 = once(host, "host:botc-state");
   host.emit("host:botc-nominate", { code: roomCode, nominatorSeatId: 3, nomineeSeatId: 4 });
   state = (await s2).state;
-  assertTrue(state.day.currentNomination, "a nomination is open");
+  assertTrue(state.day.currentNomination, "a nomination is open with a live 300ms timer");
 
-  // ---- Begin night WITHOUT resolving the vote ----
+  // ---- Begin night WITHOUT resolving the vote, then watch for ~1s (>3x the
+  //      timer): if begin-night did not clear it, the timer would auto-pass
+  //      the first voter (seat 5) and prompt the NEXT voter (seat 6). Listen
+  //      on every seat except seat 5's player, which already got its one
+  //      legitimate prompt when the nomination opened. ----
+  const watchers = players.filter((_, i) => i !== 4);
   const noVotePrompt = Promise.race([
-    new Promise((res) => players[0].socket.once("game:botc-your-turn-to-vote", () => res("FIRED"))),
-    new Promise((res) => setTimeout(() => res("quiet"), 1500)),
+    new Promise((res) => watchers.forEach((p) => p.socket.once("game:botc-your-turn-to-vote", () => res("FIRED")))),
+    new Promise((res) => setTimeout(() => res("quiet"), 1000)),
   ]);
 
   s2 = once(host, "host:botc-state");
@@ -318,10 +319,20 @@ async function scenario7_secondDay() {
   state = (await s2).state;
   assertTrue(state.phase === "night", "host:botc-begin-night moved into the night mid-vote");
   assertTrue(state.day.currentNomination === null, "the live nomination was dropped on begin-night (IMPORTANT 1)");
+  assertTrue(state.day.pendingVirgin === null && state.day.pendingSlayer === null, "no stale Virgin/Slayer prompt carried into the night");
 
   const result = await noVotePrompt;
-  assertTrue(result === "quiet", "no vote prompt reached a phone during the night (stale timer was cleared)");
+  assertTrue(result === "quiet", "no vote prompt reached a phone during the night (the armed 300ms timer was cleared)");
   console.log("  PASS -- begin-night mid-vote clears the nomination and the armed vote timer");
+
+  // ---- During the night: set the game-long settings we expect to survive ----
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 5000 });
+  state = (await s2).state;
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-verbal", { code: roomCode, verbal: true });
+  state = (await s2).state;
+  assertTrue(state.day.voteTimerMs === 5000 && state.day.verbalMode === true, "settings applied");
 
   // ---- Night 2 -> day 2: settings carried forward ----
   state = await driveNightToEnd(host, roomCode, state, (step, st) => {

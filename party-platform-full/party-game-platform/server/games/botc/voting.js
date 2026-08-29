@@ -111,6 +111,20 @@ function forceSkipVoter(state) {
   nom.currentVoterIndex += 1;
 }
 
+// Fast-forward the voter pointer over any run of seats that cannot cast a
+// vote at all -- a dead player whose one ghost vote is already spent.
+// Called before the prompt/timer is set so both land on a seat that can
+// actually act, instead of the timer burning a full cycle per spent ghost.
+function advancePastIneligibleVoters(state) {
+  const nom = state.day && state.day.currentNomination;
+  if (!nom) return;
+  while (nom.currentVoterIndex < nom.order.length) {
+    const seat = stateModule.findSeatById(state, nom.order[nom.currentVoterIndex]);
+    if (seat && !seat.alive && seat.usedDeadVote) nom.currentVoterIndex += 1;
+    else break;
+  }
+}
+
 // A Butler's yes vote only counts if their chosen master also voted yes on
 // this same nomination -- checked at tally time so voting order never has
 // to wait on the master's turn.
@@ -149,4 +163,4 @@ function resolveNomination(state) {
   return { onBlock: onBlock ? onBlock.seatId : null, votes };
 }
 
-module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, forceSkipVoter, resolveNomination, shouldPromptVoter };
+module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, forceSkipVoter, advancePastIneligibleVoters, resolveNomination, shouldPromptVoter };
