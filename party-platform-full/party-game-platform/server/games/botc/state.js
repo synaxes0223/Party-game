@@ -28,6 +28,7 @@ function createSeat(seatId, playerToken, nickname) {
     alignment: null,
     alive: true,
     usedDeadVote: false,
+    verbal: false,
     reminders: [],
   };
 }

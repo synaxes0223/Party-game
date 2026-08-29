@@ -84,6 +84,7 @@ function publicStateView(state) {
       alignment: seat.alignment,
       alive: seat.alive,
       usedDeadVote: seat.usedDeadVote,
+      verbal: seat.verbal,
       reminders: seat.reminders.map((r) => ({ id: r.id, kind: r.kind, label: r.label })),
     })),
     day: state.day
@@ -93,6 +94,7 @@ function publicStateView(state) {
           currentNomination: publicNomination(state.day.currentNomination),
           onBlock: state.day.onBlock,
           voteTimerMs: state.day.voteTimerMs,
+          verbalMode: state.day.verbalMode,
           pendingVirgin: state.day.pendingVirgin
             ? {
                 ...state.day.pendingVirgin,
@@ -180,25 +182,31 @@ function maybePromptVoteTurn(room, io) {
   const voterSeat = stateModule.findSeatById(st, voterSeatId);
   if (!voterSeat) return;
   const nomineeSeat = stateModule.findSeatById(st, nomination.nomineeSeatId);
-  io.to(voterSeat.playerToken).emit("game:botc-your-turn-to-vote", {
-    nomineeSeatId: nomination.nomineeSeatId,
-    nomineeNickname: nomineeSeat ? nomineeSeat.nickname : null,
-  });
 
-  const ms = st.day.voteTimerMs;
-  if (ms > 0) {
-    room.botcVoteTimer = setTimeout(() => {
-      room.botcVoteTimer = null;
-      const cur = st.day && st.day.currentNomination;
-      if (!cur || cur.order[cur.currentVoterIndex] !== voterSeatId) return; // already voted
-      const r = voting.castVote(st, voterSeatId, false);
-      // A dead seat whose ghost vote is spent can't be recorded -- castVote
-      // rejects it without advancing, so step past it or the timer spins.
-      if (r && r.error) voting.forceSkipVoter(st);
-      maybePromptVoteTurn(room, io);
-      emitState(room, io);
-    }, ms);
-    room.botcVoteTimer.unref();
+  // Verbal mode (global or this seat): no phone prompt, no auto-pass timer --
+  // the Storyteller casts this vote by hand via host:botc-vote. The
+  // clearVoteTimer(room) at the top of the function still always ran.
+  if (voting.shouldPromptVoter(st, voterSeatId)) {
+    io.to(voterSeat.playerToken).emit("game:botc-your-turn-to-vote", {
+      nomineeSeatId: nomination.nomineeSeatId,
+      nomineeNickname: nomineeSeat ? nomineeSeat.nickname : null,
+    });
+
+    const ms = st.day.voteTimerMs;
+    if (ms > 0) {
+      room.botcVoteTimer = setTimeout(() => {
+        room.botcVoteTimer = null;
+        const cur = st.day && st.day.currentNomination;
+        if (!cur || cur.order[cur.currentVoterIndex] !== voterSeatId) return; // already voted
+        const r = voting.castVote(st, voterSeatId, false);
+        // A dead seat whose ghost vote is spent can't be recorded -- castVote
+        // rejects it without advancing, so step past it or the timer spins.
+        if (r && r.error) voting.forceSkipVoter(st);
+        maybePromptVoteTurn(room, io);
+        emitState(room, io);
+      }, ms);
+      room.botcVoteTimer.unref();
+    }
   }
 }
 
@@ -434,14 +442,16 @@ function attach(io, socket, ctx) {
     emitState(room, io);
   });
 
-  socket.on("host:botc-night-candidate", ({ code, candidateId }) => {
+  socket.on("host:botc-night-candidate", ({ code, candidateId, verbal }) => {
     withHostRoom(code, (room) => {
       const step = nightLoop.currentStep(room.gameState);
       const result = nightLoop.submitCandidate(room.gameState, candidateId);
       if (step && result.chosenCandidate) {
         const module = characters.getModuleForStep(step.stepId);
         const text = module.renderForPlayer(result.chosenCandidate.payload);
-        if (text) io.to(step.seat.playerToken).emit("game:botc-info", { text });
+        // Verbal: the Storyteller reads this reveal aloud, so don't push it
+        // to the player's phone.
+        if (text && !verbal) io.to(step.seat.playerToken).emit("game:botc-info", { text });
       }
       maybeEndNight(room);
       maybePromptNightChoice(room, io);
@@ -558,6 +568,26 @@ function attach(io, socket, ctx) {
       if (!room.gameState.day || !room.gameState.day.currentNomination) return;
       voting.resolveNomination(room.gameState);
       clearVoteTimer(room);
+      emitState(room, io);
+    });
+  });
+
+  // Global verbal mode: the Storyteller runs the whole day by hand, phones
+  // out of the loop. Turning it on also kills any live auto-pass timer.
+  socket.on("host:botc-set-verbal", ({ code, verbal }) => {
+    withHostRoom(code, (room) => {
+      if (!room.gameState.day) return;
+      room.gameState.day.verbalMode = !!verbal;
+      if (verbal) clearVoteTimer(room);
+      emitState(room, io);
+    });
+  });
+
+  // Per-seat verbal: just this one phone is out of the loop.
+  socket.on("host:botc-set-seat-verbal", ({ code, seatId, verbal }) => {
+    withHostRoom(code, (room) => {
+      const seat = stateModule.findSeatById(room.gameState, seatId);
+      if (seat) seat.verbal = !!verbal;
       emitState(room, io);
     });
   });

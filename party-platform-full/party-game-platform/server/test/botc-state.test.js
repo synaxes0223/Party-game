@@ -27,6 +27,10 @@ test("createSeat produces a fresh, alive, unassigned seat", () => {
   assert.deepEqual(seat.reminders, []);
 });
 
+test("createSeat starts non-verbal", () => {
+  assert.equal(state.createSeat(1, "t1", "A").verbal, false);
+});
+
 function seededState(names) {
   const s = state.createInitialState();
   s.seats = names.map((n, i) => state.createSeat(i + 1, `tok-${n}`, n));

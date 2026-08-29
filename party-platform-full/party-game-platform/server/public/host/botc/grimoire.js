@@ -81,6 +81,13 @@ function renderSeatRow(seat, displayNumber) {
   aliveBtn.dataset.toggleAliveFor = seat.seatId;
   aliveBtn.dataset.nextAlive = seat.alive ? "false" : "true";
 
+  const verbalBtn = document.createElement("button");
+  verbalBtn.type = "button";
+  verbalBtn.className = "btn-secondary";
+  verbalBtn.textContent = seat.verbal ? "Phone: off" : "Phone: on";
+  verbalBtn.dataset.toggleVerbalFor = seat.seatId;
+  verbalBtn.dataset.nextVerbal = seat.verbal ? "false" : "true";
+
   const reminderInput = document.createElement("input");
   reminderInput.type = "text";
   reminderInput.className = "input-field";
@@ -102,6 +109,7 @@ function renderSeatRow(seat, displayNumber) {
 
   controls.appendChild(charSelect);
   controls.appendChild(aliveBtn);
+  controls.appendChild(verbalBtn);
   controls.appendChild(reminderInput);
   controls.appendChild(reminderKindSelect);
   controls.appendChild(addReminderBtn);
@@ -138,6 +146,16 @@ function wireSeatListDelegation() {
         code: store.roomCode,
         seatId: Number(toggleSeatId),
         alive: e.target.dataset.nextAlive === "true",
+      });
+      return;
+    }
+
+    const verbalSeatId = e.target.dataset.toggleVerbalFor;
+    if (verbalSeatId) {
+      store.socket.emit("host:botc-set-seat-verbal", {
+        code: store.roomCode,
+        seatId: Number(verbalSeatId),
+        verbal: e.target.dataset.nextVerbal === "true",
       });
       return;
     }

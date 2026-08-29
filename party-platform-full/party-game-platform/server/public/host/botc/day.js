@@ -188,12 +188,21 @@ function renderEndedBanner() {
 }
 
 export function initDayPanel() {
+  const g = document.getElementById("botc-verbal-global");
+
   onStateChange(() => {
     renderDayPanel();
     renderVoteControls();
     renderVirginPrompt();
     renderSlayerRow();
     renderEndedBanner();
+    if (store.latestState && store.latestState.day && document.activeElement !== g) {
+      g.checked = !!store.latestState.day.verbalMode;
+    }
+  });
+
+  g.addEventListener("change", () => {
+    store.socket.emit("host:botc-set-verbal", { code: store.roomCode, verbal: g.checked });
   });
 
   document.getElementById("btn-botc-set-vote-timer").addEventListener("click", () => {

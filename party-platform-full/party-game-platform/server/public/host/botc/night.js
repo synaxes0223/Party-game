@@ -33,6 +33,11 @@ function renderCandidates(step) {
   area.innerHTML = "";
   if (!step || !step.candidates || step.requiresChoice) return;
 
+  // Verbal night reveal: log the pick but don't push game:botc-info to the
+  // player's phone -- the Storyteller reads it aloud. Read at click time so
+  // toggling the box mid-step takes effect without a re-render.
+  const isVerbal = () => document.getElementById("botc-night-verbal").checked;
+
   // A candidate-based step can legally have zero candidates (e.g. the
   // Demon-bluffs step once every implemented good character is already
   // dealt -- a documented limitation of steps/demonInfo.js, not a bug).
@@ -45,7 +50,7 @@ function renderCandidates(step) {
     skipBtn.className = "btn-secondary";
     skipBtn.textContent = "No info to send — Advance";
     skipBtn.addEventListener("click", () => {
-      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: null });
+      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: null, verbal: isVerbal() });
     });
     area.appendChild(skipBtn);
     return;
@@ -61,7 +66,7 @@ function renderCandidates(step) {
     randomBtn.textContent = "🎲 Pick a true one at random";
     randomBtn.addEventListener("click", () => {
       const pick = trueCandidates[Math.floor(Math.random() * trueCandidates.length)];
-      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: pick.id });
+      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: pick.id, verbal: isVerbal() });
     });
     area.appendChild(randomBtn);
   }
@@ -76,7 +81,7 @@ function renderCandidates(step) {
     btn.className = "btn-secondary";
     btn.textContent = "Send";
     btn.addEventListener("click", () => {
-      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: c.id });
+      store.socket.emit("host:botc-night-candidate", { code: store.roomCode, candidateId: c.id, verbal: isVerbal() });
     });
     row.appendChild(label);
     row.appendChild(btn);

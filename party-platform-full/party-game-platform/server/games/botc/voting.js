@@ -18,7 +18,18 @@ function startDay(state) {
     pendingVirgin: null,
     pendingSlayer: null,
     voteTimerMs: 15000,
+    verbalMode: false,
   };
+}
+
+// Whether a given voter's phone should be prompted (and armed with an
+// auto-pass timer) when it becomes their turn. Verbal mode -- global or
+// just this seat -- means the Storyteller is running the vote by hand, so
+// no phone prompt and no timer: the vote waits for host:botc-vote.
+function shouldPromptVoter(state, seatId) {
+  if (state.day && state.day.verbalMode) return false;
+  const seat = stateModule.findSeatById(state, seatId);
+  return !(seat && seat.verbal);
 }
 
 function votingOrderStartingLeftOf(state, nomineeSeatId) {
@@ -134,4 +145,4 @@ function resolveNomination(state) {
   return { onBlock: onBlock ? onBlock.seatId : null, votes };
 }
 
-module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, forceSkipVoter, resolveNomination };
+module.exports = { startDay, startNomination, beginVoteFor, requiredVotes, castVote, forceSkipVoter, resolveNomination, shouldPromptVoter };
