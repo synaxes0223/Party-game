@@ -156,6 +156,111 @@ async function scenario5_curatedCharacters() {
   players.forEach((p) => p.socket.close());
 }
 
+async function scenario6_dayDramaAndTimers() {
+  console.log("\n[Scenario 6] Virgin execution, Slayer kill ends the game, a vote past an expired timer");
+  const { host, roomCode } = await createRoom();
+  const players = await joinPlayers(roomCode, ["Al", "Be", "Ce", "De", "El", "Fi", "Gu"]);
+
+  const dealt = once(host, "host:botc-state");
+  host.emit("host:botc-manual-deal", {
+    code: roomCode,
+    assignments: [
+      { seatId: 1, characterId: "virgin" },
+      { seatId: 2, characterId: "slayer" },
+      { seatId: 3, characterId: "empath" },
+      { seatId: 4, characterId: "soldier" },
+      { seatId: 5, characterId: "chef" },
+      { seatId: 6, characterId: "poisoner" },
+      { seatId: 7, characterId: "imp" },
+    ],
+  });
+  let state = (await dealt).state;
+  assertTrue(state.phase === "night" && state.dayNumber === 1, "manual deal starts night 1");
+
+  // First night -> day. Poison the Soldier (harmless here); every reveal picks its first candidate.
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    if (step.stepId === "poisoner") return 4;
+    const other = st.seats.find((s) => s.alive && s.seatId !== step.seatId);
+    return other ? other.seatId : step.seatId;
+  });
+  assertTrue(state.phase === "day-discussion", "reached day 1");
+
+  // ---- Virgin: seat 3 (the Empath, a Townsfolk) nominates the Virgin (seat 1) ----
+  let s2 = once(host, "host:botc-state");
+  host.emit("host:botc-nominate", { code: roomCode, nominatorSeatId: 3, nomineeSeatId: 1 });
+  state = (await s2).state;
+  assertTrue(state.day.pendingVirgin && state.day.pendingVirgin.nominatorSeatId === 3, "the Virgin nomination paused");
+  assertTrue(state.day.currentNomination === null, "no vote started yet");
+  assertTrue(state.day.pendingVirgin.nominatorRegistersAsTownsfolk === true, "the Empath registers as a Townsfolk");
+
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-virgin-resolve", { code: roomCode, execute: true, proceed: false });
+  state = (await s2).state;
+  assertTrue(state.seats.find((s) => s.seatId === 3).alive === false, "the Townsfolk nominator was executed by the Virgin");
+  assertTrue(state.day.pendingVirgin === null, "the Virgin prompt cleared");
+  assertTrue(state.phase === "day-discussion" && !state.ended, "game continues (4 good vs 2 evil, no parity)");
+  console.log("  PASS -- Virgin executed the nominator on Storyteller confirm");
+
+  // ---- Vote timer: 400ms, open a nomination, let the first voter time out ----
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 400 });
+  state = (await s2).state;
+  assertTrue(state.day.voteTimerMs === 400, "vote timer set to 400ms");
+
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-nominate", { code: roomCode, nominatorSeatId: 6, nomineeSeatId: 7 }); // Poisoner nominates Imp
+  state = (await s2).state;
+  assertTrue(state.day.currentNomination, "the vote started");
+  const startIndex = state.day.currentNomination.currentVoterIndex;
+
+  const advanced = await new Promise((resolve) => {
+    const handler = ({ state: st }) => {
+      if (st.day && st.day.currentNomination && st.day.currentNomination.currentVoterIndex > startIndex) {
+        host.off("host:botc-state", handler);
+        resolve(st);
+      }
+    };
+    host.on("host:botc-state", handler);
+  });
+  assertTrue(
+    advanced.day.currentNomination.currentVoterIndex > startIndex,
+    "the vote advanced past a voter who never voted (timer auto-pass)"
+  );
+  console.log("  PASS -- an expired vote timer auto-passed the current voter");
+  state = advanced;
+
+  // Skip the remaining voters, then resolve.
+  let guard = 0;
+  while (state.day && state.day.currentNomination && guard++ < 12) {
+    const nom = state.day.currentNomination;
+    if (nom.currentVoterIndex >= nom.order.length) {
+      const s4 = once(host, "host:botc-state");
+      host.emit("host:botc-resolve-vote", { code: roomCode });
+      state = (await s4).state;
+      break;
+    }
+    const s3 = once(host, "host:botc-state");
+    host.emit("host:botc-skip-voter", { code: roomCode });
+    state = (await s3).state;
+  }
+  assertTrue(!state.day.currentNomination, "the timed nomination resolved");
+
+  // ---- Slayer: seat 2 shoots seat 7 (the Imp). Storyteller confirms -> good wins ----
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-slayer-shot", { code: roomCode, shooterSeatId: 2, targetSeatId: 7 });
+  state = (await s2).state;
+  assertTrue(state.day.pendingSlayer && state.day.pendingSlayer.targetSeatId === 7, "Slayer shot is pending confirm");
+
+  const ended = once(host, "game:botc-ended");
+  host.emit("host:botc-slayer-resolve", { code: roomCode, killed: true });
+  const verdict = await ended;
+  assertTrue(verdict.winner === "good", "killing the Imp with the Slayer ends the game for good");
+  console.log("  PASS -- Slayer shot the Demon and good won");
+
+  host.close();
+  players.forEach((p) => p.socket.close());
+}
+
 async function main() {
   const server = require("child_process");
   const proc = server.spawn(process.execPath, ["index.js"], {
@@ -576,6 +681,8 @@ async function main() {
     players4.forEach((p) => p.socket.close());
 
     await scenario5_curatedCharacters();
+
+    await scenario6_dayDramaAndTimers();
 
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
