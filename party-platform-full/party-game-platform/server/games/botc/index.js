@@ -9,6 +9,7 @@ const characters = require("./characters");
 const nightLoop = require("./nightLoop");
 const voting = require("./voting");
 const slayer = require("./slayer");
+const virgin = require("./virgin");
 const winConditions = require("./winConditions");
 
 const meta = {
@@ -472,7 +473,15 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-nominate", ({ code, nominatorSeatId, nomineeSeatId }) => {
     withHostRoom(code, (room) => {
       if (room.gameState.phase !== "day-discussion" || !room.gameState.day) return;
+      if (room.gameState.day.pendingVirgin || room.gameState.day.currentNomination) {
+        socket.emit("host:botc-error", { error: "Resolve the current nomination first." });
+        return;
+      }
       const result = voting.startNomination(room.gameState, nominatorSeatId, nomineeSeatId);
+      if (result && result.error) {
+        socket.emit("host:botc-error", { error: result.error });
+        return;
+      }
       if (!result.virginTrigger) maybePromptVoteTurn(room, io);
       emitState(room, io);
     });
@@ -488,7 +497,7 @@ function attach(io, socket, ctx) {
       if (!pending) return;
       const virginSeat = stateModule.findSeatById(room.gameState, pending.nomineeSeatId);
       const nominatorSeat = stateModule.findSeatById(room.gameState, pending.nominatorSeatId);
-      if (virginSeat) require("./virgin").markUsed(room.gameState, virginSeat);
+      if (virginSeat) virgin.markUsed(room.gameState, virginSeat);
 
       if (execute && nominatorSeat && nominatorSeat.alive) {
         grimoire.setAlive(nominatorSeat, false);
@@ -511,9 +520,19 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-slayer-shot", ({ code, shooterSeatId, targetSeatId }) => {
     withHostRoom(code, (room) => {
       const st = room.gameState;
-      if (st.phase !== "day-discussion" || !st.day) return;
+      if (st.phase !== "day-discussion" || !st.day) {
+        socket.emit("host:botc-error", { error: "The Slayer's shot can only be used during the day." });
+        return;
+      }
       const shooter = stateModule.findSeatById(st, shooterSeatId);
-      if (!shooter || !slayer.isSlayer(shooter) || slayer.hasUsedShot(shooter)) return;
+      if (!shooter || !slayer.isSlayer(shooter)) {
+        socket.emit("host:botc-error", { error: `Seat ${shooterSeatId} is not the Slayer.` });
+        return;
+      }
+      if (slayer.hasUsedShot(shooter)) {
+        socket.emit("host:botc-error", { error: "The Slayer has already used their shot." });
+        return;
+      }
       st.day.pendingSlayer = { shooterSeatId, targetSeatId };
       emitState(room, io);
     });
@@ -563,6 +582,7 @@ function attach(io, socket, ctx) {
   socket.on("player:botc-vote", ({ code, voted }) => {
     const room = roomService.getRoom(code);
     if (!room || !room.gameState || room.gameId !== meta.id) return;
+    if (room.gameState.phase !== "day-discussion") return;
     if (!room.gameState.day || !room.gameState.day.currentNomination) return;
     const nomination = room.gameState.day.currentNomination;
     const currentSeatId = nomination.order[nomination.currentVoterIndex];
@@ -644,6 +664,11 @@ function attach(io, socket, ctx) {
   socket.on("host:botc-begin-night", ({ code }) => {
     withHostRoom(code, (room) => {
       if (room.gameState.phase === "ended") return;
+      // A nomination + armed vote timer may still be live if the Storyteller
+      // clicks "Begin Night" mid-vote -- drop both so the timer can't fire
+      // (and cascade phone prompts) during the night that follows.
+      clearVoteTimer(room);
+      if (room.gameState.day) room.gameState.day.currentNomination = null;
       nightLoop.startNight(room.gameState);
       maybePromptNightChoice(room, io);
       emitState(room, io);

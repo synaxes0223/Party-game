@@ -10,6 +10,25 @@ test("startDay seeds a 15s default vote timer", () => {
   assert.equal(s.day.voteTimerMs, 15000);
 });
 
+test("startDay carries voteTimerMs and verbalMode forward across nights", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  voting.startDay(s);
+  s.day.voteTimerMs = 5000;
+  s.day.verbalMode = true;
+  voting.startDay(s); // night 1 -> day 2
+  assert.equal(s.day.voteTimerMs, 5000);
+  assert.equal(s.day.verbalMode, true);
+});
+
+test("startDay on a fresh state still seeds 15000 / false", () => {
+  const s = state.createInitialState();
+  s.seats = [1, 2].map((n) => state.createSeat(n, `t${n}`, `P${n}`));
+  voting.startDay(s);
+  assert.equal(s.day.voteTimerMs, 15000);
+  assert.equal(s.day.verbalMode, false);
+});
+
 test("shouldPromptVoter is false under global verbal mode", () => {
   const s = state.createInitialState();
   s.seats = [1, 2].map((n) => state.createSeat(n, `t${n}`, `P${n}`));

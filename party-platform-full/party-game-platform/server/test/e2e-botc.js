@@ -261,6 +261,83 @@ async function scenario6_dayDramaAndTimers() {
   players.forEach((p) => p.socket.close());
 }
 
+async function scenario7_secondDay() {
+  console.log("\n[Scenario 7] A second day: begin-night mid-vote clears the stale timer; verbal + timer settings survive to day 2");
+  const { host, roomCode } = await createRoom();
+  const players = await joinPlayers(roomCode, ["Al7", "Be7", "Ce7", "De7", "El7", "Fi7", "Gu7"]);
+
+  const dealt = once(host, "host:botc-state");
+  host.emit("host:botc-manual-deal", {
+    code: roomCode,
+    assignments: [
+      { seatId: 1, characterId: "virgin" },
+      { seatId: 2, characterId: "slayer" },
+      { seatId: 3, characterId: "empath" },
+      { seatId: 4, characterId: "soldier" },
+      { seatId: 5, characterId: "chef" },
+      { seatId: 6, characterId: "poisoner" },
+      { seatId: 7, characterId: "imp" },
+    ],
+  });
+  let state = (await dealt).state;
+  assertTrue(state.phase === "night" && state.dayNumber === 1, "manual deal starts night 1");
+
+  // Night 1 -> day 1.
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    if (step.stepId === "poisoner") return 4;
+    const other = st.seats.find((s) => s.alive && s.seatId !== step.seatId);
+    return other ? other.seatId : step.seatId;
+  });
+  assertTrue(state.phase === "day-discussion", "reached day 1");
+
+  // ---- Day 1: set custom vote timer + global verbal mode ----
+  let s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 5000 });
+  state = (await s2).state;
+  assertTrue(state.day.voteTimerMs === 5000, "vote timer set to 5000ms on day 1");
+
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-verbal", { code: roomCode, verbal: true });
+  state = (await s2).state;
+  assertTrue(state.day.verbalMode === true, "global verbal mode enabled on day 1");
+
+  // ---- Open a nomination (seat 3 -> seat 4, NOT the Virgin) ----
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-nominate", { code: roomCode, nominatorSeatId: 3, nomineeSeatId: 4 });
+  state = (await s2).state;
+  assertTrue(state.day.currentNomination, "a nomination is open");
+
+  // ---- Begin night WITHOUT resolving the vote ----
+  const noVotePrompt = Promise.race([
+    new Promise((res) => players[0].socket.once("game:botc-your-turn-to-vote", () => res("FIRED"))),
+    new Promise((res) => setTimeout(() => res("quiet"), 1500)),
+  ]);
+
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-begin-night", { code: roomCode });
+  state = (await s2).state;
+  assertTrue(state.phase === "night", "host:botc-begin-night moved into the night mid-vote");
+  assertTrue(state.day.currentNomination === null, "the live nomination was dropped on begin-night (IMPORTANT 1)");
+
+  const result = await noVotePrompt;
+  assertTrue(result === "quiet", "no vote prompt reached a phone during the night (stale timer was cleared)");
+  console.log("  PASS -- begin-night mid-vote clears the nomination and the armed vote timer");
+
+  // ---- Night 2 -> day 2: settings carried forward ----
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    if (step.stepId === "poisoner") return 4;
+    if (step.stepId === "imp") return 4; // Soldier, safe
+    return firstOtherAliveSeat(step, st);
+  });
+  assertTrue(state.phase === "day-discussion" && state.dayNumber === 2, "reached day 2");
+  assertTrue(state.day.voteTimerMs === 5000, "voteTimerMs carried forward to day 2 (IMPORTANT 2)");
+  assertTrue(state.day.verbalMode === true, "verbalMode carried forward to day 2 (IMPORTANT 2)");
+  console.log("  PASS -- custom vote timer and verbal mode survived night 1 -> day 2");
+
+  host.close();
+  players.forEach((p) => p.socket.close());
+}
+
 async function main() {
   const server = require("child_process");
   const proc = server.spawn(process.execPath, ["index.js"], {
@@ -683,6 +760,8 @@ async function main() {
     await scenario5_curatedCharacters();
 
     await scenario6_dayDramaAndTimers();
+
+    await scenario7_secondDay();
 
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();

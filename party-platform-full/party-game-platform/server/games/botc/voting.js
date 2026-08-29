@@ -10,6 +10,10 @@ const stateModule = require("./state");
 const virgin = require("./virgin");
 
 function startDay(state) {
+  // voteTimerMs and verbalMode are game-long table settings the Storyteller
+  // sets once -- carry them across the nightly rebuild of state.day so day-1
+  // choices don't silently reset on day 2. Everything else is per-day.
+  const prev = state.day;
   state.day = {
     nominationsMade: [],
     nominationsReceived: [],
@@ -17,8 +21,8 @@ function startDay(state) {
     onBlock: null,
     pendingVirgin: null,
     pendingSlayer: null,
-    voteTimerMs: 15000,
-    verbalMode: false,
+    voteTimerMs: prev ? prev.voteTimerMs : 15000,
+    verbalMode: prev ? prev.verbalMode : false,
   };
 }
 

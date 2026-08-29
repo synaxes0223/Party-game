@@ -219,11 +219,16 @@ export function initDayPanel() {
     store.socket.emit("host:botc-nominate", { code: store.roomCode, nominatorSeatId, nomineeSeatId });
   });
 
+  // Execute the nominator: they die and the nomination is dropped — no vote
+  // is ever led by a dead nominator.
   document.getElementById("btn-botc-virgin-execute").addEventListener("click", () => {
-    store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: true, proceed: true });
+    store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: true, proceed: false });
   });
-  document.getElementById("btn-botc-virgin-spare").addEventListener("click", () => {
+  document.getElementById("btn-botc-virgin-spare-vote").addEventListener("click", () => {
     store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: false, proceed: true });
+  });
+  document.getElementById("btn-botc-virgin-spare-drop").addEventListener("click", () => {
+    store.socket.emit("host:botc-virgin-resolve", { code: store.roomCode, execute: false, proceed: false });
   });
 
   document.getElementById("btn-botc-slayer-shot").addEventListener("click", () => {

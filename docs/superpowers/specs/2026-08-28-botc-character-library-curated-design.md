@@ -121,22 +121,25 @@ Everything night-phase, plus the two characters resolved outside the day loop.
 Everything day-phase: the two interactive day characters and all of T7.
 
 - **Virgin** — in `voting.startNomination`, if the nominee is a Virgin whose
-  ability is unused, the nomination **pauses** and the host receives
-  `host:botc-virgin-check` carrying the nominator's current registered team.
-  The app never auto-executes — whether the nominator counts as a Townsfolk
-  and whether the Virgin is drunk/poisoned are Storyteller judgments (parent
-  spec §7). `host:botc-virgin-confirm { execute, proceedWithNomination }`
+  ability is unused, the nomination **pauses**: the engine records the prompt
+  in `publicStateView.day.pendingVirgin` (state-driven, so it survives a host
+  refresh — a one-shot event would not), carrying the nominator's current
+  registered team. The app never auto-executes — whether the nominator counts
+  as a Townsfolk and whether the Virgin is drunk/poisoned are Storyteller
+  judgments (parent spec §7). `host:botc-virgin-resolve { execute, proceed }`
   resolves it: on `execute`, the nominator dies and a `used` reminder is added
-  to the Virgin; the nomination then proceeds or is dropped per the
-  Storyteller's choice.
+  to the Virgin; on `proceed`, the nomination then goes to a vote, otherwise
+  it is dropped. (Executing the nominator drops the nomination — no vote is
+  ever led by a dead nominator.)
 - **Slayer** — valid only in `day-discussion`, once per game (tracked by a
-  `used` reminder on the Slayer's seat). `player:botc-slayer-shot { code,
-  targetSeatId }` (self-service) and `host:botc-slayer-shot` (verbal/override)
-  both route to a host confirm — `host:botc-slayer-check` →
-  `host:botc-slayer-confirm { killed }` — because a drunk/poisoned Slayer does
+  `used` reminder on the Slayer's seat). `host:botc-slayer-shot` (the
+  Storyteller enters the public shot) records `publicStateView.day.pendingSlayer`
+  (state-driven, survives a host refresh), then `host:botc-slayer-resolve
+  { killed }` is the Storyteller's ruling — because a drunk/poisoned Slayer does
   nothing and that is the Storyteller's call. The outcome broadcasts to the
   whole room: `game:botc-slayer-result { shooterSeatId, targetSeatId, killed }`
-  (the shot is public theatre). A win check runs after a kill.
+  (the shot is public theatre). A win check runs after a kill. A player
+  self-service `player:botc-slayer-shot` is deferred (see Self-Review).
 - **Vote timers** — `state.day.voteTimerMs`, default `15000`, `0` disables;
   set via `host:botc-set-vote-timer { ms }`. When `maybePromptVoteTurn` lights
   up a seat, `index.js` arms a `setTimeout`; on expiry it records that voter as

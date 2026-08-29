@@ -107,7 +107,7 @@ export function initRoleAndInfo() {
   store.socket.on("game:botc-slayer-result", ({ shooterNickname, targetNickname, killed }) => {
     showInfoToast(
       killed
-        ? `${shooterNickname} shot ${targetNickname} — the Demon dies!`
+        ? `${shooterNickname} shot ${targetNickname} — they die.`
         : `${shooterNickname} shot ${targetNickname} — nothing happens.`
     );
   });
