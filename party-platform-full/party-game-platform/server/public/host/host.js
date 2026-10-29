@@ -981,6 +981,16 @@ socket.on("room:reset", ({ room }) => {
   ptbHolderId = null;
   ptbRing = [];
   smSpice = 3;
+  document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
+  [
+    ["#screen-setup", wwtSpice],
+    ["#screen-xp-prompt-select", xpSpice],
+    ["#screen-ptb-prompt-select", ptbSpice],
+    ["#screen-sm-setup", smSpice],
+  ].forEach(([sel, val]) => {
+    const btn = document.querySelector(`${sel} .spice-btn[data-spice="${val}"]`);
+    if (btn) btn.classList.add("active");
+  });
   renderPlayers(room.players);
   document.querySelectorAll(".game-card").forEach((c) => c.classList.remove("selected"));
   showScreen("lobby");
