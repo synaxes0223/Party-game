@@ -61,6 +61,7 @@ function roleLabel() {
 }
 
 function showScreen(name) {
+  document.querySelectorAll(".error").forEach((el) => (el.textContent = ""));
   Object.values(screens).forEach((s) => s.classList.remove("active"));
   screens[name].classList.add("active");
 }
