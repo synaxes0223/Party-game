@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const state = require("../games/botc/state");
+const winConditions = require("../games/botc/winConditions");
+const empath = require("../games/botc/characters/empath");
 
 test("createInitialState returns the expected shape", () => {
   const s = state.createInitialState();
@@ -98,4 +100,36 @@ test("appendInfoLog pushes a structured entry", () => {
   state.appendInfoLog(s, { night: 1, seatId: 3, characterId: "empath", text: "1 evil neighbour", truthful: true });
   assert.equal(s.infoLog.length, 1);
   assert.deepEqual(s.infoLog[0], { night: 1, seatId: 3, characterId: "empath", text: "1 evil neighbour", truthful: true });
+});
+
+test("checkWinCondition returns a winner when exactly 2 alive with evil parity", () => {
+  // 3 seats: Alice (good, alive), Bob (imp/demon, evil, alive), Carol (dead)
+  const s = seededState(["Alice", "Bob", "Carol"]);
+  s.seats[0].characterId = "empath";
+  s.seats[0].alignment = "good";
+  s.seats[1].characterId = "imp";
+  s.seats[1].alignment = "evil";
+  s.seats[2].alive = false;
+  const verdict = winConditions.checkWinCondition(s);
+  assert.ok(verdict !== null, "should detect a winner");
+  assert.equal(verdict.winner, "evil");
+  // Simulating what applyWinCheckAndMaybeEnd does
+  s.phase = "ended";
+  assert.equal(s.phase, "ended", "phase must be ended so begin-night guard fires");
+});
+
+test("empath computeCandidates returns count:1 (not 2) when only one living neighbour is evil", () => {
+  // 3 seats: Alice (empath, good, alive), Bob (dead), Carol (evil, alive)
+  // aliveNeighborsOf(Alice) returns Carol on both sides -- de-duplication should yield count 1
+  const s = seededState(["Alice", "Bob", "Carol"]);
+  s.seats[0].characterId = "empath";
+  s.seats[0].believedCharacterId = "empath";
+  s.seats[0].alignment = "good";
+  s.seats[1].alive = false;
+  s.seats[2].characterId = "imp";
+  s.seats[2].alignment = "evil";
+  const candidates = empath.computeCandidates(s, s.seats[0]);
+  const trueCand = candidates.find((c) => c.truthful);
+  assert.ok(trueCand, "should have a truthful candidate");
+  assert.equal(trueCand.payload.count, 1, "true count must be 1, not 2, when the same evil neighbour appears on both sides");
 });
