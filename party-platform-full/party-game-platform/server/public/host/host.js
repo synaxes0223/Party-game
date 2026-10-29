@@ -989,8 +989,9 @@ socket.on("room:reset", ({ room }) => {
 // ---- Track-select tabs ----
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    const tabContainer = btn.closest(".screen");
+    tabContainer.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    tabContainer.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
     if (btn.dataset.tab === "upload") {
