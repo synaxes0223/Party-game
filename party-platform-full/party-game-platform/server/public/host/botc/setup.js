@@ -159,6 +159,11 @@ export function initSetup() {
 
   document.getElementById("btn-botc-random-deal").addEventListener("click", () => {
     document.getElementById("botc-setup-error").textContent = "";
+    if (orderedPlayerIds.length > 12) {
+      document.getElementById("botc-setup-error").textContent =
+        "Random deals support 5–12 players. Add a third Minion script to support 13+ players.";
+      return;
+    }
     store.socket.emit("host:botc-start", { code: store.roomCode, seatOrder: orderedPlayerIds });
   });
 
