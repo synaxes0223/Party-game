@@ -665,6 +665,7 @@ function attach(io, socket, ctx) {
   // forever after day 1 -- there is no automatic day-to-night transition.
   socket.on("host:botc-begin-night", ({ code }) => {
     withHostRoom(code, (room) => {
+      applyWinCheckAndMaybeEnd(room, io);
       if (room.gameState.phase === "ended") return;
       // A nomination + armed vote timer, or an unanswered Virgin/Slayer
       // prompt, may still be live if the Storyteller clicks "Begin Night"

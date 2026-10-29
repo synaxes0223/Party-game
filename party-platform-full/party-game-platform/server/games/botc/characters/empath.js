@@ -10,7 +10,8 @@ const grimoire = require("../grimoire");
 function computeCandidates(state, seat) {
   const { left, right } = stateModule.aliveNeighborsOf(state, seat.seatId);
   if (!left || !right) return [];
-  const trueCount = [left, right].filter((n) => grimoire.isEvilRegistering(n)).length;
+  const neighbors = left === right ? [left] : [left, right];
+  const trueCount = neighbors.filter((n) => grimoire.isEvilRegistering(n)).length;
   return [0, 1, 2].map((count) => ({
     id: `count-${count}`,
     label: count === trueCount ? `True: ${count} evil neighbour(s)` : `False: ${count} evil neighbour(s)`,
