@@ -408,6 +408,10 @@ document.getElementById("btn-submit-answer").addEventListener("click", () => {
   document.getElementById("wwt-answer-status").textContent = "Answer submitted — you can still edit it until everyone's in.";
 });
 
+document.getElementById("wwt-answer-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("btn-submit-answer").click();
+});
+
 socket.on("player:answer-rejected", ({ error }) => {
   document.getElementById("wwt-answer-status").textContent = error;
 });
