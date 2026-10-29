@@ -43,8 +43,13 @@ function computeCandidates(state, seat) {
   }];
 }
 
+function idToLabel(id) {
+  return id.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
 function renderForPlayer(payload) {
-  return `Your Minion is ${payload.minion.nickname} (${payload.minion.characterId}). Possible bluffs: ${payload.bluffs.join(", ")}.`;
+  const bluffLabels = payload.bluffs.map(idToLabel).join(", ");
+  return `Your Minion is ${payload.minion.nickname} (${payload.minion.characterId}). Possible bluffs: ${bluffLabels}.`;
 }
 
 module.exports = {
