@@ -758,6 +758,10 @@ document.getElementById("btn-sm-start-night").addEventListener("click", () => {
   socket.emit("host:start-missions", { code: roomCode });
 });
 
+document.getElementById("btn-sm-back-to-lobby").addEventListener("click", () => {
+  showScreen("lobby");
+});
+
 function renderSmBoard(listEl, missions) {
   listEl.innerHTML = "";
   const icons = { open: "⬜", claimed: "✅", busted: "💥" };
@@ -1115,12 +1119,20 @@ function enterSlipUpSetup() {
   showScreen("setup");
 }
 
+document.getElementById("btn-slipup-back-to-lobby").addEventListener("click", () => {
+  showScreen("lobby");
+});
+
 function enterAvalonSetup() {
   document.getElementById("avalon-setup-error").textContent = "";
   document.getElementById("avalon-player-count").textContent =
     document.querySelectorAll("#player-list li").length;
   showScreen("avalonSetup");
 }
+
+document.getElementById("btn-avalon-back-to-lobby").addEventListener("click", () => {
+  showScreen("lobby");
+});
 
 document.getElementById("btn-avalon-start").addEventListener("click", () => {
   document.getElementById("avalon-setup-error").textContent = "";
