@@ -364,13 +364,14 @@ socket.on("game:prompt-sources", ({ aiAvailable }) => {
 
 document.querySelectorAll(".spice-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
+    btn.closest(".spice-tabs").querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     const spice = Number(btn.dataset.spice);
-    wwtSpice = spice;
-    xpSpice = spice;
-    ptbSpice = spice;
-    smSpice = spice;
+    const screenId = btn.closest("section").id;
+    if (screenId === "screen-wwt-prompt-select") wwtSpice = spice;
+    else if (screenId === "screen-xp-prompt-select") xpSpice = spice;
+    else if (screenId === "screen-ptb-prompt-select") ptbSpice = spice;
+    else if (screenId === "screen-sm-setup") smSpice = spice;
     socket.emit("host:set-spice", { code: roomCode, spice });
   });
 });
