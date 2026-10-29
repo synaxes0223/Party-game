@@ -114,6 +114,12 @@
   gap: 6px;
 }
 
+.botc-seat-controls .btn-secondary,
+.botc-seat-controls select,
+.botc-seat-controls .input-field {
+  width: auto;
+}
+
 .botc-seat-order-list {
   list-style: none;
   padding: 0;
