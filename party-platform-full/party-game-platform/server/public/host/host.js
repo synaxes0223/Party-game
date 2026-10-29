@@ -387,12 +387,19 @@ document.getElementById("btn-custom-prompt").addEventListener("click", () => {
 });
 
 document.getElementById("btn-generate-prompts").addEventListener("click", () => {
+  const genBtn = document.getElementById("btn-generate-prompts");
+  if (genBtn.disabled) return;
   document.getElementById("wwt-prompt-select-error").textContent = "";
   const topic = document.getElementById("wwt-ai-topic").value.trim();
+  genBtn.disabled = true;
+  genBtn.textContent = "Generating…";
   socket.emit("host:generate-prompts", { code: roomCode, topic, spice: wwtSpice, count: 10 });
 });
 
 socket.on("game:generated-prompts", ({ prompts }) => {
+  const genBtn = document.getElementById("btn-generate-prompts");
+  genBtn.disabled = false;
+  genBtn.textContent = "Generate";
   const container = document.getElementById("wwt-ai-batch");
   container.innerHTML = "";
   prompts.forEach((p, i) => {
