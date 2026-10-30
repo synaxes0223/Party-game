@@ -164,3 +164,34 @@ test("a Drunk who believes they are the Empath is scheduled on the Empath's step
   }
   throw new Error("empath step was never scheduled for the Drunk");
 });
+
+test("in a game with two Minions, both are woken for minion-info on the first night", () => {
+  const s = state.createInitialState();
+  // 7-player game: 2 minions, 1 demon, 4 townsfolk
+  s.seats = [1, 2, 3, 4, 5, 6, 7].map((n) => state.createSeat(n, `tok-${n}`, `P${n}`));
+  dealing.dealManual(s, [
+    { seatId: 1, characterId: "poisoner" }, // minion 1
+    { seatId: 2, characterId: "baron" },    // minion 2
+    { seatId: 3, characterId: "imp" },      // demon
+    { seatId: 4, characterId: "washerwoman" },
+    { seatId: 5, characterId: "empath" },
+    { seatId: 6, characterId: "chef" },
+    { seatId: 7, characterId: "butler" },
+  ]);
+  nightLoop.startNight(s);
+
+  const wokenSeatIds = [];
+  let guard = 0;
+  while (!nightLoop.isNightOver(s) && guard < 30) {
+    const step = nightLoop.currentStep(s);
+    if (!step) break;
+    if (step.stepId === "minion-info") wokenSeatIds.push(step.seat.seatId);
+    if (step.requiresChoice) nightLoop.submitChoice(s, { targetSeatId: s.seats[0].seatId });
+    else nightLoop.submitCandidate(s, step.candidates[0] ? step.candidates[0].id : null);
+    guard++;
+  }
+
+  assert.ok(wokenSeatIds.includes(1), "minion 1 (poisoner) is woken for minion-info");
+  assert.ok(wokenSeatIds.includes(2), "minion 2 (baron) is woken for minion-info");
+  assert.equal(wokenSeatIds.length, 2, "exactly two seats are woken for minion-info");
+});
