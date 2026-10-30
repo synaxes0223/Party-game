@@ -162,9 +162,12 @@ function maybePromptNightChoice(room, io) {
   if (room.gameState.phase !== "night") return;
   const step = nightLoop.currentStep(room.gameState);
   if (!step || !step.requiresChoice) return;
+  const excludeSelf = step.requiresChoice.type === "select-one-player-excluding-self";
+  const allTargets = room.gameState.seats.map((s) => ({ seatId: s.seatId, nickname: s.nickname, alive: s.alive }));
+  const targets = excludeSelf ? allTargets.filter((s) => s.seatId !== step.seat.seatId) : allTargets;
   io.to(step.seat.playerToken).emit("game:botc-your-turn", {
     choiceType: step.requiresChoice.type,
-    targets: room.gameState.seats.map((s) => ({ seatId: s.seatId, nickname: s.nickname, alive: s.alive })),
+    targets,
   });
 }
 

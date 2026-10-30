@@ -36,3 +36,10 @@ test("applyChoice on a later night replaces the previous master, not adds a seco
   assert.equal(masterReminders.length, 1);
   assert.equal(masterReminders[0].targetSeatId, 3);
 });
+
+test("applyChoice ignores self-selection and leaves no reminder", () => {
+  const s = seededState(["Alice", "Bob"]);
+  butler.applyChoice(s, s.seats[0], { targetSeatId: s.seats[0].seatId });
+  const masterReminders = s.seats[0].reminders.filter((r) => r.sourceCharacterId === "butler");
+  assert.equal(masterReminders.length, 0);
+});
