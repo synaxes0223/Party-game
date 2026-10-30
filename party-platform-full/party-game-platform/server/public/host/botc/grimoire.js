@@ -16,6 +16,8 @@ const CHARACTERS = [
   { id: "librarian", label: "Librarian" },
   { id: "monk", label: "Monk" },
   { id: "fortuneTeller", label: "Fortune Teller" },
+  { id: "virgin", label: "Virgin" },
+  { id: "slayer", label: "Slayer" },
   { id: "butler", label: "Butler" },
   { id: "drunk", label: "Drunk" },
   { id: "saint", label: "Saint" },
