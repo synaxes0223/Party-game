@@ -403,7 +403,7 @@ function attach(io, socket, ctx) {
     withHostRoom(code, (room) => {
       const seat = stateModule.findSeatById(room.gameState, seatId);
       if (!seat || !label) return;
-      const KINDS = new Set(["custom", "red-herring", "protected", "poisoned"]);
+      const KINDS = new Set(["custom", "red-herring", "protected", "poisoned", "used"]);
       const k = KINDS.has(kind) ? kind : "custom";
       grimoire.addReminder(room.gameState, seat, k, null, label);
       emitState(room, io);

@@ -12,7 +12,7 @@ function isSlayer(seat) {
 }
 
 function hasUsedShot(seat) {
-  return seat.reminders.some((r) => r.sourceCharacterId === "slayer" && r.kind === "used");
+  return seat.reminders.some((r) => r.kind === "used");
 }
 
 function resolveShot(state, shooterSeat, targetSeat, killed) {
