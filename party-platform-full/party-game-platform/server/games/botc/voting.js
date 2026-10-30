@@ -62,6 +62,9 @@ function beginVoteFor(state, nominatorSeatId, nomineeSeatId) {
 }
 
 function startNomination(state, nominatorSeatId, nomineeSeatId, opts = {}) {
+  if (nominatorSeatId === nomineeSeatId) {
+    return { error: "A player cannot nominate themselves." };
+  }
   if (state.day.nominationsMade.includes(nominatorSeatId)) {
     return { error: "This player has already nominated today." };
   }
