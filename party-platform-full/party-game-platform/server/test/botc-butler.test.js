@@ -28,6 +28,13 @@ test("applyChoice records the chosen master as a targeted reminder on the butler
   assert.match(reminder.label, /Bob/);
 });
 
+test("applyChoice ignores self-selection and leaves no reminder", () => {
+  const s = seededState(["Alice", "Bob"]);
+  butler.applyChoice(s, s.seats[0], { targetSeatId: s.seats[0].seatId });
+  const masterReminders = s.seats[0].reminders.filter((r) => r.sourceCharacterId === "butler");
+  assert.equal(masterReminders.length, 0);
+});
+
 test("applyChoice on a later night replaces the previous master, not adds a second one", () => {
   const s = seededState(["Alice", "Bob", "Carol"]);
   butler.applyChoice(s, s.seats[0], { targetSeatId: 2 });
