@@ -22,6 +22,8 @@ const CHARACTERS = [
   { id: "virgin", label: "Virgin", team: "Townsfolk" },
   { id: "slayer", label: "Slayer", team: "Townsfolk" },
   { id: "fortuneTeller", label: "Fortune Teller", team: "Townsfolk" },
+  { id: "virgin", label: "Virgin", team: "Townsfolk" },
+  { id: "slayer", label: "Slayer", team: "Townsfolk" },
   { id: "butler", label: "Butler", team: "Outsider" },
   { id: "drunk", label: "Drunk", team: "Outsider" },
   { id: "saint", label: "Saint", team: "Outsider" },
