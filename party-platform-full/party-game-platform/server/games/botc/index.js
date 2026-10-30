@@ -696,12 +696,6 @@ function onPlayerLeft(room, io, playerId) {
 // They do NOT get a state snapshot: publicStateView is the host's grimoire
 // view (true characterId/believedCharacterId/alignment for every seat,
 // including other players' evil identities) and must never reach a player.
-// Calling the same maybePromptNightChoice/maybePromptVoteTurn the
-// Storyteller's own actions use (rather than writing seat-scoped variants)
-// means a harmless, occasional duplicate prompt to whichever OTHER seat
-// currently holds the turn if a different player is the one reconnecting --
-// accepted as simpler and safer than a second, parallel prompt-computation
-// path that could drift from these two's logic over time.
 function onPlayerRejoined(room, io, playerId) {
   const state = room.gameState;
   if (!state) return;
@@ -709,7 +703,13 @@ function onPlayerRejoined(room, io, playerId) {
   if (!seat) return;
   io.to(playerId).emit("game:botc-role", { characterId: seat.believedCharacterId, alignment: seat.alignment });
   maybePromptNightChoice(room, io);
-  maybePromptVoteTurn(room, io);
+  // Only re-prompt (and reset the vote timer) if it is this player's own turn
+  // to vote; calling it for a different reconnecting player would cancel the
+  // current voter's in-flight timer.
+  const nom = state.day && state.day.currentNomination;
+  if (nom && nom.order[nom.currentVoterIndex] === seat.seatId) {
+    maybePromptVoteTurn(room, io);
+  }
 }
 
 module.exports = { meta, attach, onPlayerLeft, onPlayerRejoined, onReset };
