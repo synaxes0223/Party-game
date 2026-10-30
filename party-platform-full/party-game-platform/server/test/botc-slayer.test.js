@@ -24,6 +24,18 @@ test("isSlayer / hasUsedShot track the once-per-game state", () => {
   assert.equal(slayer.hasUsedShot(s.seats[0]), true);
 });
 
+test("hasUsedShot is true after a manually-placed 'used' reminder (sourceCharacterId null)", () => {
+  const s = dealtState([
+    { nickname: "A", characterId: "slayer" },
+    { nickname: "B", characterId: "imp" },
+    { nickname: "C", characterId: "empath" },
+  ]);
+  const grimoire = require("../games/botc/grimoire");
+  assert.equal(slayer.hasUsedShot(s.seats[0]), false);
+  grimoire.addReminder(s, s.seats[0], "used", null, "Shot used");
+  assert.equal(slayer.hasUsedShot(s.seats[0]), true);
+});
+
 test("resolveShot kills the target only when killed is true", () => {
   const s = dealtState([
     { nickname: "A", characterId: "slayer" },
