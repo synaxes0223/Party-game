@@ -559,6 +559,13 @@ io.on("connection", (socket) => {
 // Rooms are no longer emptied by disconnects, so reclaim abandoned ones on a
 // timer. Unref so the interval never keeps the process alive on its own.
 const ROOM_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-setInterval(() => roomService.sweepAbandonedRooms(), ROOM_SWEEP_INTERVAL_MS).unref();
+setInterval(() => {
+  roomService.sweepAbandonedRooms(Date.now(), undefined, (room) => {
+    if (room.gameId) {
+      const game = gameRegistry.getGame(room.gameId);
+      if (game && game.onReset) game.onReset(room);
+    }
+  });
+}, ROOM_SWEEP_INTERVAL_MS).unref();
 
 server.listen(PORT, "0.0.0.0", printLanUrl);
