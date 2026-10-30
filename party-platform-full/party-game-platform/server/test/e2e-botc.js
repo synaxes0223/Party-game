@@ -349,6 +349,83 @@ async function scenario7_secondDay() {
   players.forEach((p) => p.socket.close());
 }
 
+async function scenario8_rejoinDuringVote() {
+  console.log("\n[Scenario 8] Player B rejoining while player A's vote timer is running must not reset player A's timer");
+  const { host, roomCode } = await createRoom();
+  // 5 players: seats 1-5.  Seat 5 = Imp (evil), rest Townsfolk.
+  const players = await joinPlayers(roomCode, ["Al8", "Be8", "Ce8", "De8", "El8"]);
+
+  const dealt = once(host, "host:botc-state");
+  host.emit("host:botc-manual-deal", {
+    code: roomCode,
+    assignments: [
+      { seatId: 1, characterId: "washerwoman" },
+      { seatId: 2, characterId: "empath" },
+      { seatId: 3, characterId: "soldier" },
+      { seatId: 4, characterId: "chef" },
+      { seatId: 5, characterId: "imp" },
+    ],
+  });
+  let state = (await dealt).state;
+
+  state = await driveNightToEnd(host, roomCode, state, (step, st) => {
+    const other = st.seats.find((s) => s.alive && s.seatId !== step.seatId);
+    return other ? other.seatId : step.seatId;
+  });
+  assertTrue(state.phase === "day-discussion", "reached day 1");
+
+  // Set a 600ms vote timer.
+  let s2 = once(host, "host:botc-state");
+  host.emit("host:botc-set-vote-timer", { code: roomCode, ms: 600 });
+  state = (await s2).state;
+
+  // Open a nomination: seat 2 nominates seat 5 (non-Virgin so it opens immediately).
+  s2 = once(host, "host:botc-state");
+  host.emit("host:botc-nominate", { code: roomCode, nominatorSeatId: 2, nomineeSeatId: 5 });
+  state = (await s2).state;
+  assertTrue(state.day.currentNomination, "nomination is open");
+
+  // Find which player is the current voter and a DIFFERENT player to disconnect/rejoin.
+  const voterSeatId = state.day.currentNomination.order[state.day.currentNomination.currentVoterIndex];
+  const bystander = players.find((p) => {
+    const seat = state.seats.find((s) => s.nickname === p.name);
+    return seat && seat.seatId !== voterSeatId;
+  });
+  assertTrue(!!bystander, "found a non-voter player to rejoin");
+
+  // Disconnect the bystander, wait briefly, then reconnect them.
+  // This must NOT cancel the current voter's in-flight timer.
+  bystander.socket.disconnect();
+  await new Promise((r) => setTimeout(r, 50));
+  const reconnected8 = await connect();
+  const rejoinedPromise8 = once(reconnected8, "player:rejoined");
+  reconnected8.emit("player:join-room", { code: roomCode, nickname: bystander.name, token: bystander.token });
+  await rejoinedPromise8;
+
+  // Wait for the 600ms timer to fire by listening for the voter-index to advance.
+  const startIndex = state.day.currentNomination.currentVoterIndex;
+  const advanced8 = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("vote timer did not auto-advance after bystander rejoin")), 2000);
+    const handler = ({ state: st }) => {
+      if (st.day && st.day.currentNomination && st.day.currentNomination.currentVoterIndex > startIndex) {
+        clearTimeout(timeout);
+        host.off("host:botc-state", handler);
+        resolve(st);
+      }
+    };
+    host.on("host:botc-state", handler);
+  });
+  assertTrue(
+    advanced8.day.currentNomination.currentVoterIndex > startIndex,
+    "vote timer still fired and advanced the voter index after bystander rejoin"
+  );
+  console.log("  PASS -- bystander rejoin did not cancel the current voter's running timer");
+
+  reconnected8.close();
+  host.close();
+  players.forEach((p) => p.socket.close());
+}
+
 async function main() {
   const server = require("child_process");
   const proc = server.spawn(process.execPath, ["index.js"], {
@@ -773,6 +850,8 @@ async function main() {
     await scenario6_dayDramaAndTimers();
 
     await scenario7_secondDay();
+
+    await scenario8_rejoinDuringVote();
 
     console.log("\nALL BOTC E2E SCENARIOS PASSED");
     proc.kill();
