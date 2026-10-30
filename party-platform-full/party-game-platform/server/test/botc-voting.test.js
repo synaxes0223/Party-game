@@ -35,6 +35,15 @@ test("startNomination sets up the voter order starting to the nominee's left, no
   assert.equal(order.length, 7);
 });
 
+test("startNomination rejects a self-nomination and records nothing", () => {
+  const s = sevenSeatGame();
+  const result = voting.startNomination(s, 3, 3);
+  assert.equal(typeof result.error, "string");
+  assert.equal(s.day.nominationsMade.includes(3), false, "nominator not recorded");
+  assert.equal(s.day.nominationsReceived.includes(3), false, "nominee not recorded");
+  assert.equal(s.day.currentNomination, null, "no vote started");
+});
+
 test("startNomination rejects a second nomination by the same nominator on the same day", () => {
   const s = sevenSeatGame();
   voting.startNomination(s, 1, 2);
