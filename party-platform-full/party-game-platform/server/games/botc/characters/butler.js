@@ -10,7 +10,7 @@ const grimoire = require("../grimoire");
 function applyChoice(state, seat, choice) {
   grimoire.removeRemindersFrom(seat, "butler"); // clear last night's master, if any
   const master = stateModule.findSeatById(state, choice.targetSeatId);
-  if (!master) return;
+  if (!master || master.seatId === seat.seatId) return;
   grimoire.addReminder(state, seat, "custom", "butler", `Master: ${master.nickname}`, master.seatId);
 }
 
