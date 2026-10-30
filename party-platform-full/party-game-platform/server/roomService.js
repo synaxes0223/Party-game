@@ -93,7 +93,7 @@ function markPlayerDisconnected(playerToken) {
 
 // Nobody is removed on disconnect any more, so rooms have to be reclaimed on a
 // timer instead of when the last player leaves.
-function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000) {
+function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000, onBeforeDelete) {
   const deleted = [];
   for (const room of rooms.values()) {
     const players = Array.from(room.players.values());
@@ -105,6 +105,7 @@ function sweepAbandonedRooms(now = Date.now(), graceMs = 10 * 60 * 1000) {
     const lastSeen = Math.max(...timestamps);
 
     if (now - lastSeen >= graceMs) {
+      if (onBeforeDelete) onBeforeDelete(room);
       rooms.delete(room.code);
       deleted.push(room.code);
     }

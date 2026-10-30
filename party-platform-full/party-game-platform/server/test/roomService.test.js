@@ -166,3 +166,13 @@ test("an empty room whose host left is swept after the grace period", () => {
   const deleted = roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE);
   assert.equal(deleted.includes(room.code), true);
 });
+
+test("onBeforeDelete callback is called with the room before it is deleted", () => {
+  const { host: HOST } = freshTokens();
+  const room = roomService.createRoom(HOST);
+  roomService.markHostDisconnected(HOST);
+  const seen = [];
+  roomService.sweepAbandonedRooms(Date.now() + 11 * MINUTE, 10 * MINUTE, (r) => seen.push(r.code));
+  assert.equal(seen.includes(room.code), true);
+  assert.equal(roomService.getRoom(room.code), undefined);
+});
