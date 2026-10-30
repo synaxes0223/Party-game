@@ -15,8 +15,8 @@ function shuffle(array) {
 }
 
 function computeCandidates(state, seat) {
-  const minionSeat = state.seats.find((s) => characters.teamOf(s.characterId) === "minion");
-  if (!minionSeat) return [];
+  const minionSeats = state.seats.filter((s) => s.alive && characters.teamOf(s.characterId) === "minion");
+  if (minionSeats.length === 0) return [];
 
   const dealtIds = new Set(state.seats.map((s) => s.characterId));
   const goodPool = [
@@ -31,20 +31,24 @@ function computeCandidates(state, seat) {
   // bluffs array -- and stops mattering once the full 22-character script
   // exists.
   const bluffs = shuffle(goodPool).slice(0, 3);
+  const minionNames = minionSeats.map((s) => s.nickname).join(", ");
+  const plural = minionSeats.length > 1 ? "s" : "";
 
   return [{
-    id: "reveal-minion-and-bluffs",
-    label: `Reveal the Minion (${minionSeat.nickname}) and 3 bluffs`,
+    id: "reveal-minions-and-bluffs",
+    label: `Reveal the Minion${plural} (${minionNames}) and 3 bluffs`,
     truthful: true,
     payload: {
-      minion: { seatId: minionSeat.seatId, nickname: minionSeat.nickname, characterId: minionSeat.characterId },
+      minions: minionSeats.map((s) => ({ seatId: s.seatId, nickname: s.nickname, characterId: s.characterId })),
       bluffs,
     },
   }];
 }
 
 function renderForPlayer(payload) {
-  return `Your Minion is ${payload.minion.nickname} (${payload.minion.characterId}). Possible bluffs: ${payload.bluffs.join(", ")}.`;
+  const minionList = payload.minions.map((m) => `${m.nickname} (${m.characterId})`).join(", ");
+  const label = payload.minions.length === 1 ? "Your Minion is" : "Your Minions are";
+  return `${label} ${minionList}. Possible bluffs: ${payload.bluffs.join(", ")}.`;
 }
 
 module.exports = {

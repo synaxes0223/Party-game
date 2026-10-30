@@ -164,3 +164,52 @@ test("a Drunk who believes they are the Empath is scheduled on the Empath's step
   }
   throw new Error("empath step was never scheduled for the Drunk");
 });
+
+test("10-player game with 2 minions: both minion seats are woken for minion-info, and demon-info shows both minions", () => {
+  // 7 townsfolk + 2 minions + 1 demon = 10 players
+  const s = dealtState([
+    { nickname: "P1", characterId: "washerwoman" },
+    { nickname: "P2", characterId: "empath" },
+    { nickname: "P3", characterId: "chef" },
+    { nickname: "P4", characterId: "investigator" },
+    { nickname: "P5", characterId: "librarian" },
+    { nickname: "P6", characterId: "fortuneTeller" },
+    { nickname: "P7", characterId: "soldier" },
+    { nickname: "P8", characterId: "poisoner" },
+    { nickname: "P9", characterId: "baron" },
+    { nickname: "P10", characterId: "imp" },
+  ]);
+  nightLoop.startNight(s);
+
+  const wokenSteps = []; // { stepId, seatId }
+  let demonInfoCandidates = null;
+  let guard = 0;
+  while (!nightLoop.isNightOver(s) && guard < 30) {
+    const step = nightLoop.currentStep(s);
+    if (!step) break;
+    wokenSteps.push({ stepId: step.stepId, seatId: step.seat.seatId });
+    if (step.stepId === "demon-info") demonInfoCandidates = step.candidates;
+    if (step.requiresChoice) {
+      const other = s.seats.find((seat) => seat.alive && seat.seatId !== step.seat.seatId) || step.seat;
+      nightLoop.submitChoice(s, { targetSeatId: other.seatId });
+    } else {
+      nightLoop.submitCandidate(s, step.candidates[0] ? step.candidates[0].id : null);
+    }
+    guard++;
+  }
+
+  const minionInfoSteps = wokenSteps.filter((w) => w.stepId === "minion-info");
+  assert.equal(minionInfoSteps.length, 2, "minion-info fires once for each minion");
+
+  const minionSeatIds = s.seats
+    .filter((seat) => seat.characterId === "poisoner" || seat.characterId === "baron")
+    .map((seat) => seat.seatId);
+  const wokenMinionSeatIds = minionInfoSteps.map((w) => w.seatId);
+  assert.deepEqual(wokenMinionSeatIds.sort(), minionSeatIds.sort(), "both minion seats are woken");
+
+  assert.ok(demonInfoCandidates && demonInfoCandidates.length > 0, "demon-info has candidates");
+  const demonPayload = demonInfoCandidates[0].payload;
+  assert.equal(demonPayload.minions.length, 2, "demon sees both minions");
+  const demonMinionsNicknames = demonPayload.minions.map((m) => m.nickname).sort();
+  assert.deepEqual(demonMinionsNicknames, ["P8", "P9"], "demon sees P8 (poisoner) and P9 (baron)");
+});

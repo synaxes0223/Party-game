@@ -10,14 +10,15 @@ const grimoire = require("./grimoire");
 const characters = require("./characters");
 const nightOrder = require("./nightOrder");
 
-function seatForStep(state, stepId) {
+function seatsForStep(state, stepId) {
   if (stepId === "minion-info") {
-    return state.seats.find((s) => s.alive && characters.teamOf(s.characterId) === "minion") || null;
+    return state.seats.filter((s) => s.alive && characters.teamOf(s.characterId) === "minion");
   }
   if (stepId === "demon-info") {
-    return state.seats.find((s) => s.alive && characters.teamOf(s.characterId) === "demon") || null;
+    return state.seats.filter((s) => s.alive && characters.teamOf(s.characterId) === "demon");
   }
-  return state.seats.find((s) => s.alive && s.believedCharacterId === stepId) || null;
+  const seat = state.seats.find((s) => s.alive && s.believedCharacterId === stepId);
+  return seat ? [seat] : [];
 }
 
 function orderFor(state) {
@@ -31,7 +32,7 @@ function startNight(state) {
   grimoire.removeRemindersOfKind(state, "poisoned");
   grimoire.removeRemindersOfKind(state, "protected");
   grimoire.removeRemindersOfKind(state, "ft-pick");
-  state.nightPointer = { orderIndex: 0, stepId: orderFor(state)[0] || null };
+  state.nightPointer = { orderIndex: 0, stepId: orderFor(state)[0] || null, seatIndex: 0 };
   skipToSchedulable(state);
 }
 
@@ -39,8 +40,8 @@ function skipToSchedulable(state) {
   const order = orderFor(state);
   while (state.nightPointer && state.nightPointer.orderIndex < order.length) {
     const stepId = order[state.nightPointer.orderIndex];
-    const seat = seatForStep(state, stepId);
-    if (seat) {
+    const seats = seatsForStep(state, stepId);
+    if (seats.length > 0) {
       state.nightPointer.stepId = stepId;
       return;
     }
@@ -56,7 +57,8 @@ function isNightOver(state) {
 function currentStep(state) {
   if (isNightOver(state)) return null;
   const stepId = state.nightPointer.stepId;
-  const seat = seatForStep(state, stepId);
+  const seats = seatsForStep(state, stepId);
+  const seat = seats[state.nightPointer.seatIndex] || null;
   if (!seat) {
     // seat died between scheduling and now (shouldn't happen mid-step, but
     // don't hand back a step with no seat -- skip forward instead)
@@ -75,7 +77,14 @@ function currentStep(state) {
 
 function advance(state) {
   if (!state.nightPointer) return;
+  const seats = seatsForStep(state, state.nightPointer.stepId);
+  const nextSeatIndex = state.nightPointer.seatIndex + 1;
+  if (nextSeatIndex < seats.length) {
+    state.nightPointer.seatIndex = nextSeatIndex;
+    return;
+  }
   state.nightPointer.orderIndex += 1;
+  state.nightPointer.seatIndex = 0;
   skipToSchedulable(state);
 }
 
