@@ -54,6 +54,21 @@ test("computeCandidates uses alive neighbours, skipping a dead adjacent seat", (
   assert.equal(truthful.payload.count, 1); // Dave (poisoner, evil) counts; Carol (soldier, good) doesn't
 });
 
+test("computeCandidates deduplicates when only 2 alive players remain (left === right)", () => {
+  const s = dealtState([
+    { nickname: "Alice", characterId: "empath" },
+    { nickname: "Bob", characterId: "imp" }, // the single alive neighbour, also evil
+    { nickname: "Carol", characterId: "soldier" },
+  ]);
+  s.seats[2].alive = false; // Carol dies -- only Alice and Bob alive
+  const candidates = empath.computeCandidates(s, s.seats[0]);
+  // Only one unique neighbour, so valid counts are 0 and 1 only
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates.find((c) => c.id === "count-2"), undefined); // count-2 absent
+  const truthful = candidates.find((c) => c.truthful);
+  assert.equal(truthful.payload.count, 1); // Bob is evil, trueCount must be 1 not 2
+});
+
 test("renderForPlayer states the count from payload alone", () => {
   assert.equal(empath.renderForPlayer({ count: 2 }), "2 of your alive neighbours are evil.");
 });
