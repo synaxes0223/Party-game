@@ -364,7 +364,7 @@ socket.on("game:prompt-sources", ({ aiAvailable }) => {
 
 document.querySelectorAll(".spice-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
+    btn.closest("section").querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     const spice = Number(btn.dataset.spice);
     wwtSpice = spice;
