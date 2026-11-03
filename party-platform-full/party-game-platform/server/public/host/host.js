@@ -1369,7 +1369,9 @@ socket.on("wheel:list-updated", ({ items }) => {
 });
 
 socket.on("wheel:add-error", ({ error }) => {
-  alert(error);
+  const el = document.getElementById("wheel-add-error");
+  el.textContent = error;
+  setTimeout(() => { el.textContent = ""; }, 4000);
 });
 
 function renderWheelList() {
