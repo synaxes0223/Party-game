@@ -59,6 +59,11 @@ socket.on("room:game-selected", ({ gameId }) => {
   currentGameId = gameId;
   const usesPromptPipeline = gameId === "who-wrote-that" || gameId === "x-people" || gameId === "pass-the-bomb";
   document.getElementById("wwt-submit-widget").style.display = usesPromptPipeline ? "block" : "none";
+  const submitLabel =
+    gameId === "x-people" ? "Submit a question" :
+    gameId === "pass-the-bomb" ? "Submit a category" :
+    "Submit a prompt";
+  document.getElementById("btn-toggle-submit-prompt").textContent = "✍️ " + submitLabel;
 });
 
 function showScreen(name) {
