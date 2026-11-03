@@ -206,9 +206,16 @@ function renderGameList(games) {
 
 function updateStartButton() {
   const btn = document.getElementById("btn-start-game");
+  const hint = document.getElementById("start-btn-hint");
   const playerCount = document.querySelectorAll("#player-list li").length;
   const selectedGame = gamesById[selectedGameId];
-  btn.disabled = !(selectedGame && playerCount >= selectedGame.minPlayers && playerCount <= selectedGame.maxPlayers);
+  const enabled = !!(selectedGame && playerCount >= selectedGame.minPlayers && playerCount <= selectedGame.maxPlayers);
+  btn.disabled = !enabled;
+  if (!enabled && selectedGame) {
+    hint.textContent = `Needs ${selectedGame.minPlayers}–${selectedGame.maxPlayers} players (${playerCount} joined)`;
+  } else {
+    hint.textContent = "";
+  }
 }
 
 document.getElementById("btn-start-game").addEventListener("click", () => {
