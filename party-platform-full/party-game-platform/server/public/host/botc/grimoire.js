@@ -22,6 +22,8 @@ const CHARACTERS = [
   { id: "poisoner", label: "Poisoner" },
   { id: "baron", label: "Baron" },
   { id: "imp", label: "Imp" },
+  { id: "virgin", label: "Virgin" },
+  { id: "slayer", label: "Slayer" },
 ];
 
 function characterLabel(characterId) {
