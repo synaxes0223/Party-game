@@ -80,6 +80,7 @@ function attemptJoin() {
   const code = document.getElementById("input-code").value.trim().toUpperCase();
   const nickname = document.getElementById("input-nickname").value.trim();
   document.getElementById("join-error").textContent = "";
+  document.getElementById("disconnect-banner").textContent = "";
 
   if (!code || !nickname) {
     document.getElementById("join-error").textContent = "Enter both room code and your name.";
@@ -978,7 +979,8 @@ socket.on("room:reset", ({ room }) => {
 });
 
 socket.on("room:host-disconnected", () => {
-  alert("Host disconnected. The room has closed.");
+  document.getElementById("disconnect-banner").textContent = "Host disconnected. The room has closed.";
+  showScreen("join");
 });
 
 // ---- Slip-Up ----
