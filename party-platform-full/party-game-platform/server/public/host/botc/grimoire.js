@@ -84,7 +84,7 @@ function renderSeatRow(seat, displayNumber) {
   const verbalBtn = document.createElement("button");
   verbalBtn.type = "button";
   verbalBtn.className = "btn-secondary";
-  verbalBtn.textContent = seat.verbal ? "Phone: off" : "Phone: on";
+  verbalBtn.textContent = seat.verbal ? "Disable phone" : "Enable phone";
   verbalBtn.dataset.toggleVerbalFor = seat.seatId;
   verbalBtn.dataset.nextVerbal = seat.verbal ? "false" : "true";
 
