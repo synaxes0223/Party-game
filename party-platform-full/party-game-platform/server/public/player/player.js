@@ -75,6 +75,9 @@ document.getElementById("btn-join").addEventListener("click", attemptJoin);
 document.getElementById("input-nickname").addEventListener("keydown", (e) => {
   if (e.key === "Enter") attemptJoin();
 });
+document.getElementById("input-code").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") attemptJoin();
+});
 
 function attemptJoin() {
   const code = document.getElementById("input-code").value.trim().toUpperCase();
