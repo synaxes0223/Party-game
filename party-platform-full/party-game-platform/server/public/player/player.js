@@ -978,7 +978,9 @@ socket.on("room:reset", ({ room }) => {
 });
 
 socket.on("room:host-disconnected", () => {
-  alert("Host disconnected. The room has closed.");
+  const msg = document.getElementById("host-disconnected-msg");
+  msg.textContent = "Host disconnected. The room has closed.";
+  msg.style.display = "block";
 });
 
 // ---- Slip-Up ----
