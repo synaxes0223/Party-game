@@ -92,7 +92,7 @@ function showInfoToast(text) {
   const toast = document.getElementById("botc-info-toast");
   toast.textContent = text;
   toast.classList.add("show");
-  setTimeout(() => toast.classList.remove("show"), 6000);
+  setTimeout(() => toast.classList.remove("show"), 10000);
 }
 
 function renderEnded({ winner, reason }) {
