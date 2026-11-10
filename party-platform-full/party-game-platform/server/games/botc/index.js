@@ -165,6 +165,7 @@ function maybePromptNightChoice(room, io) {
   io.to(step.seat.playerToken).emit("game:botc-your-turn", {
     choiceType: step.requiresChoice.type,
     targets: room.gameState.seats.map((s) => ({ seatId: s.seatId, nickname: s.nickname, alive: s.alive })),
+    selfSeatId: step.seat.seatId,
   });
 }
 
