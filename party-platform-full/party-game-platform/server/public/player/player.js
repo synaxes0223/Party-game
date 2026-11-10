@@ -648,7 +648,10 @@ socket.on("game:mission-board", ({ missions, accusationsLeft }) => {
   renderSmAccuseOptions();
 
   const mine = (accusationsLeft || []).find((a) => a.id === myId);
-  if (mine) document.getElementById("sm-accusations-left").textContent = mine.left;
+  if (mine) {
+    document.getElementById("sm-accusations-left").textContent = mine.left;
+    document.getElementById("btn-sm-accuse").disabled = mine.left <= 0;
+  }
 });
 
 document.getElementById("btn-sm-accuse").addEventListener("click", () => {
