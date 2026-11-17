@@ -86,18 +86,26 @@ commercially, using copyrighted songs would need proper licensing.
 
 ## Known limitations (prototype-stage, by design)
 
-- **iOS Safari audio autoplay**: handled via the "I'm Ready" tap-to-prime
-  step before sync playback — required for iOS to allow the later
-  timed `play()` call to succeed without another user gesture
-- **Sync precision**: ~1.5s buffer before playback start to smooth out
-  network jitter across devices; fine for casual party use, not
+- **iOS Safari audio autoplay** (Find the Imposter): handled via the
+  "I'm Ready" tap-to-prime step before sync playback — required for iOS to
+  allow the later timed `play()` call to succeed without another user gesture
+- **Sync precision** (Find the Imposter): ~1.5s buffer before playback start
+  to smooth out network jitter across devices; fine for casual party use, not
   frame-accurate
-- **No QR code generation yet**: players currently type the room code/URL
-  manually
-- **One song pair only**: add more to `SONG_PAIRS` for variety across rounds
-- **No reconnect handling**: if a player's phone drops WiFi mid-game, they
-  need to rejoin as a new player (room state doesn't currently support
-  resuming a dropped session)
+- **Join QR code**: the host page shows a QR code for the best-guess LAN join
+  URL (built by `server/lanInfo.js` and served from `/api/join-info`).
+  The address is guessed from the host's network interfaces, so on machines
+  with several interfaces (e.g. WiFi client + hotspot) the QR may point at
+  an unreachable address and players have to use one of the other listed URLs
+- **One built-in song pair only** (Find the Imposter): add more to
+  `SONG_PAIRS` for variety across rounds, or use a pasted YouTube pair or
+  uploaded files instead
+- **Reconnects are token-based**: each browser keeps a session token in
+  `localStorage`. A player who drops WiFi and comes back with the same token
+  reclaims their seat, even mid-game, and a returning host reclaims the
+  room. Players who clear storage or switch browser/device get a new token
+  and can only join as new players while the room is still in the lobby.
+  Rooms where nobody is connected are deleted after about 10 minutes
 
 ## Extending the platform with a new game
 
