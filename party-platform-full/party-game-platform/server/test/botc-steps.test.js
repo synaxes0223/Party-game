@@ -42,8 +42,8 @@ test("demon-info reveals the sole Minion plus exactly three not-in-play good blu
   ]);
   const candidates = demonInfo.computeCandidates(s, s.seats[0]);
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].payload.minion.characterId, "poisoner");
-  assert.equal(candidates[0].payload.minion.nickname, "Bob");
+  assert.equal(candidates[0].payload.minions[0].characterId, "poisoner");
+  assert.equal(candidates[0].payload.minions[0].nickname, "Bob");
   assert.equal(candidates[0].payload.bluffs.length, 3);
   // bluffs must be good-team characters not currently dealt to any seat
   const dealtIds = s.seats.map((seat) => seat.characterId);
@@ -80,7 +80,7 @@ test("demon-info degrades safely to fewer than 3 bluffs when all implemented goo
   ]);
   const candidates = demonInfo.computeCandidates(s, s.seats[12]);
   assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].payload.minion.characterId, "poisoner");
+  assert.equal(candidates[0].payload.minions[0].characterId, "poisoner");
   assert.ok(candidates[0].payload.bluffs.length < 3);
   // Every implemented good character except the Drunk and the Saint is dealt
   // here, so those two are the only remaining bluffs.
@@ -88,9 +88,10 @@ test("demon-info degrades safely to fewer than 3 bluffs when all implemented goo
 });
 
 test("renderForPlayer for demon-info names the minion and lists the bluffs", () => {
-  const payload = { minion: { seatId: 2, nickname: "Bob", characterId: "poisoner" }, bluffs: ["empath", "soldier", "butler"] };
+  const payload = { minions: [{ seatId: 2, nickname: "Bob", characterId: "poisoner" }], bluffs: ["empath", "fortuneTeller", "butler"] };
   const text = demonInfo.renderForPlayer(payload);
   assert.match(text, /Bob/);
-  assert.match(text, /poisoner/);
-  assert.match(text, /empath/);
+  assert.match(text, /Poisoner/);
+  assert.match(text, /Empath/);
+  assert.match(text, /Fortune Teller/);
 });

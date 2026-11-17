@@ -21,13 +21,9 @@ const CHARACTERS = [
   { id: "butler", label: "Butler" },
   { id: "drunk", label: "Drunk" },
   { id: "saint", label: "Saint" },
-  { id: "virgin", label: "Virgin" },
-  { id: "slayer", label: "Slayer" },
   { id: "poisoner", label: "Poisoner" },
   { id: "baron", label: "Baron" },
   { id: "imp", label: "Imp" },
-  { id: "virgin", label: "Virgin" },
-  { id: "slayer", label: "Slayer" },
 ];
 
 function characterLabel(characterId) {

@@ -62,7 +62,7 @@ test("renderForPlayer formats a single minion correctly", () => {
     bluffs: ["soldier", "chef"],
   };
   const text = demonInfo.renderForPlayer(payload);
-  assert.ok(text.includes("Bob (poisoner)"), `expected 'Bob (poisoner)' in "${text}"`);
+  assert.ok(text.includes("Bob (Poisoner)"), `expected 'Bob (Poisoner)' in "${text}"`);
   assert.ok(text.includes("Your Minion is"), `expected singular form in "${text}"`);
 });
 
@@ -75,8 +75,8 @@ test("renderForPlayer formats multiple minions correctly", () => {
     bluffs: ["soldier", "chef"],
   };
   const text = demonInfo.renderForPlayer(payload);
-  assert.ok(text.includes("Bob (poisoner)"), `expected 'Bob (poisoner)' in "${text}"`);
-  assert.ok(text.includes("Carol (baron)"), `expected 'Carol (baron)' in "${text}"`);
+  assert.ok(text.includes("Bob (Poisoner)"), `expected 'Bob (Poisoner)' in "${text}"`);
+  assert.ok(text.includes("Carol (Baron)"), `expected 'Carol (Baron)' in "${text}"`);
   assert.ok(text.includes("Your Minions are"), `expected plural form in "${text}"`);
 });
 

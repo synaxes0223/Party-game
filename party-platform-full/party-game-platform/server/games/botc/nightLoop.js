@@ -62,7 +62,7 @@ function currentStep(state) {
   if (isNightOver(state)) return null;
   const stepId = state.nightPointer.stepId;
   const seats = seatsForStep(state, stepId);
-  const seat = seats[state.nightPointer.seatIndex] ?? null;
+  const seat = seats[state.nightPointer.seatIndex || 0] ?? null;
   if (!seat) {
     // seat died between scheduling and now (shouldn't happen mid-step, but
     // don't hand back a step with no seat -- skip forward instead)
@@ -82,7 +82,7 @@ function currentStep(state) {
 function advance(state) {
   if (!state.nightPointer) return;
   const seats = seatsForStep(state, state.nightPointer.stepId);
-  const nextSeatIndex = state.nightPointer.seatIndex + 1;
+  const nextSeatIndex = (state.nightPointer.seatIndex || 0) + 1;
   if (nextSeatIndex < seats.length) {
     // More seats remain for this step (e.g., additional Minions to wake)
     state.nightPointer.seatIndex = nextSeatIndex;

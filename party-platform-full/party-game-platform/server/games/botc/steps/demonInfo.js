@@ -44,11 +44,15 @@ function computeCandidates(state, seat) {
   }];
 }
 
+function idToLabel(id) {
+  return id.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
 function renderForPlayer(payload) {
   const minionText = payload.minions
-    .map((m) => `${m.nickname} (${m.characterId})`)
+    .map((m) => `${m.nickname} (${idToLabel(m.characterId)})`)
     .join(", ");
-  return `Your Minion${payload.minions.length !== 1 ? "s are" : " is"} ${minionText}. Possible bluffs: ${payload.bluffs.join(", ")}.`;
+  return `Your Minion${payload.minions.length !== 1 ? "s are" : " is"} ${minionText}. Possible bluffs: ${payload.bluffs.map(idToLabel).join(", ")}.`;
 }
 
 module.exports = {

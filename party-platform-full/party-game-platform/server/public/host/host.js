@@ -1003,7 +1003,7 @@ socket.on("room:reset", ({ room }) => {
   smSpice = 3;
   document.querySelectorAll(".spice-btn").forEach((b) => b.classList.remove("active"));
   [
-    ["#screen-setup", wwtSpice],
+    ["#screen-wwt-prompt-select", wwtSpice],
     ["#screen-xp-prompt-select", xpSpice],
     ["#screen-ptb-prompt-select", ptbSpice],
     ["#screen-sm-setup", smSpice],
@@ -1403,6 +1403,7 @@ document.getElementById("btn-wheel-spin").addEventListener("click", () => {
 
 socket.on("wheel:list-updated", ({ items }) => {
   wheelItems = items;
+  document.getElementById("wheel-add-error").textContent = "";
   renderWheelList();
   if (!wheelSpinning) drawWheel(0);
 });
