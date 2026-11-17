@@ -171,11 +171,11 @@
         <button id="btn-xp-yes" class="yesno-btn">YES</button>
         <button id="btn-xp-no" class="yesno-btn">NO</button>
       </div>
-      <label class="field-label">How many players (out of <span id="xp-player-count"></span>) do you think said yes?</label>
-      <div class="stepper-row">
-        <button id="btn-xp-dec" class="btn-secondary stepper-btn">−</button>
-        <span id="xp-prediction-value" class="stepper-value">0</span>
-        <button id="btn-xp-inc" class="btn-secondary stepper-btn">+</button>
+      <label id="xp-prediction-label" class="field-label">How many players (out of <span id="xp-player-count"></span>) do you think said yes?</label>
+      <div class="stepper-row" role="group" aria-labelledby="xp-prediction-label">
+        <button id="btn-xp-dec" class="btn-secondary stepper-btn" aria-label="Decrease prediction">−</button>
+        <span id="xp-prediction-value" class="stepper-value" role="status" aria-live="polite" aria-labelledby="xp-prediction-label">0</span>
+        <button id="btn-xp-inc" class="btn-secondary stepper-btn" aria-label="Increase prediction">+</button>
       </div>
       <button id="btn-xp-submit" class="btn-primary" disabled>Submit</button>
       <p id="xp-answer-status" class="hint"></p>
@@ -221,7 +221,9 @@
       <div id="sm-my-missions" class="sm-my-missions"></div>
 
       <h2>Accuse Someone</h2>
+      <label for="sm-accuse-player" class="visually-hidden">Player to accuse</label>
       <select id="sm-accuse-player" class="input-field"></select>
+      <label for="sm-accuse-mission" class="visually-hidden">Mission they completed</label>
       <select id="sm-accuse-mission" class="input-field"></select>
       <button id="btn-sm-accuse" class="btn-secondary">Accuse</button>
       <p class="hint"><span id="sm-accusations-left">3</span> accusations left</p>
@@ -287,9 +289,10 @@
   <div id="wheel-submit-panel" class="wheel-panel hidden">
     <div class="wheel-panel-header">
       <h2>Suggest a Punishment</h2>
-      <button id="btn-wheel-submit-close" class="wheel-close-btn">×</button>
+      <button id="btn-wheel-submit-close" class="wheel-close-btn" aria-label="Close">×</button>
     </div>
     <div class="wheel-add-row">
+      <label for="wheel-submit-input" class="visually-hidden">Your punishment idea</label>
       <input id="wheel-submit-input" type="text" placeholder="Your punishment idea..." />
       <button id="btn-wheel-submit" class="btn-primary">Submit</button>
     </div>
