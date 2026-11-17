@@ -993,6 +993,10 @@ socket.on("room:reset", ({ room }) => {
 });
 
 socket.on("room:host-disconnected", () => {
+  // The room is gone: forget it so a later tab switch or socket reconnect
+  // doesn't silently re-emit player:join-room and overwrite this message.
+  roomCode = null;
+  localStorage.removeItem("partyGameSession");
   document.getElementById("join-error").textContent = "Host disconnected. The room has closed.";
   showScreen("join");
 });
