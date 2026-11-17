@@ -33,6 +33,8 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  /* Leave room so content can scroll clear of fixed widgets (submit widget, wheel button). */
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
 #app { width: 100%; max-width: 720px; }
