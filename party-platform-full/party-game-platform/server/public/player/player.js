@@ -909,7 +909,7 @@ socket.on("game:results", (payload) => {
     const winnerNames = winners.map((w) => w.nickname).join(", ");
     const youWon = winners.some((w) => w.id === myId);
     document.getElementById("sm-winner-text").textContent =
-      winners.length > 1 ? `🏆 Tied: ${winnerNames}!` : `🏆 ${winnerNames} wins the night!${youWon ? " (you!)" : ""}`;
+      winners.length > 1 ? `🏆 Tied: ${winnerNames}!${youWon ? " (you!)" : ""}` : `🏆 ${winnerNames} wins the night!${youWon ? " (you!)" : ""}`;
     const revealList = document.getElementById("sm-reveal-list");
     revealList.innerHTML = "";
     reveal.forEach((m) => {
@@ -928,7 +928,7 @@ socket.on("game:results", (payload) => {
     const youWon = winners.some((w) => w.id === myId);
     document.getElementById("ptb-winner-text").textContent =
       winners.length > 1
-        ? `🏆 Tied fewest booms: ${winnerNames}!`
+        ? `🏆 Tied fewest booms: ${winnerNames}!${youWon ? " (you!)" : ""}`
         : `🏆 ${winnerNames} had the fewest booms!${youWon ? " (you!)" : ""}`;
     renderPtbTallyPlayer(document.getElementById("ptb-final-tally"), booms);
     showScreen("ptbResults");
@@ -939,7 +939,7 @@ socket.on("game:results", (payload) => {
     const winnerNames = winners.map((w) => w.nickname).join(", ");
     const youWon = winners.some((w) => w.id === myId);
     document.getElementById("xp-winner-text").textContent =
-      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!${youWon ? " (you!)" : ""}` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
     renderWwtScoreboardPlayer(document.getElementById("xp-final-scoreboard"), scores);
     showScreen("xpResults");
     return;
@@ -949,7 +949,7 @@ socket.on("game:results", (payload) => {
     const winnerNames = winners.map((w) => w.nickname).join(", ");
     const youWon = winners.some((w) => w.id === myId);
     document.getElementById("wwt-winner-text").textContent =
-      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
+      winners.length > 1 ? `🏆 It's a tie: ${winnerNames}!${youWon ? " (you!)" : ""}` : `🏆 ${winnerNames} wins!${youWon ? " (you!)" : ""}`;
     renderWwtScoreboardPlayer(document.getElementById("wwt-final-scoreboard"), scores);
     showScreen("wwtResults");
     return;
