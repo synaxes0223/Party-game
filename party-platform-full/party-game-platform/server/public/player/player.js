@@ -863,8 +863,10 @@ document.getElementById("btn-confirm-vote").addEventListener("click", () => {
 
 socket.on("player:vote-rejected", ({ reason }) => {
   if (currentGameId === "who-wrote-that") {
+    wwtSelectedVote = null;
+    renderWwtVoteOptions();
+    document.getElementById("btn-wwt-confirm-vote").disabled = true;
     document.getElementById("wwt-vote-status").textContent = reason || "That guess couldn't be submitted — pick again.";
-    document.querySelectorAll("#wwt-vote-list .vote-btn").forEach((b) => (b.disabled = false));
     return;
   }
   selectedVoteTarget = null;
