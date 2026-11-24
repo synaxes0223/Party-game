@@ -490,6 +490,7 @@ socket.on("game:prompt", ({ text, playerCount }) => {
   document.getElementById("xp-prediction-value").textContent = "0";
   document.getElementById("xp-answer-status").textContent = "";
   document.getElementById("btn-xp-submit").disabled = true;
+  updateXpStepperEnabled();
   document.querySelectorAll(".yesno-btn").forEach((b) => {
     b.classList.remove("selected");
     b.disabled = false;
@@ -515,14 +516,23 @@ document.getElementById("btn-xp-no").addEventListener("click", () => {
   updateXpSubmitEnabled();
 });
 
+// Disable − at 0 and + at the player count. Not called after submit, so
+// both buttons stay disabled until the next game:prompt.
+function updateXpStepperEnabled() {
+  document.getElementById("btn-xp-dec").disabled = xpPrediction <= 0;
+  document.getElementById("btn-xp-inc").disabled = xpPrediction >= xpMaxPrediction;
+}
+
 document.getElementById("btn-xp-dec").addEventListener("click", () => {
   xpPrediction = Math.max(0, xpPrediction - 1);
   document.getElementById("xp-prediction-value").textContent = xpPrediction;
+  updateXpStepperEnabled();
 });
 
 document.getElementById("btn-xp-inc").addEventListener("click", () => {
   xpPrediction = Math.min(xpMaxPrediction, xpPrediction + 1);
   document.getElementById("xp-prediction-value").textContent = xpPrediction;
+  updateXpStepperEnabled();
 });
 
 document.getElementById("btn-xp-submit").addEventListener("click", () => {
