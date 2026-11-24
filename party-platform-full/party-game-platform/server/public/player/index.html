@@ -171,11 +171,11 @@
         <button id="btn-xp-yes" class="yesno-btn">YES</button>
         <button id="btn-xp-no" class="yesno-btn">NO</button>
       </div>
-      <label class="field-label">How many players (out of <span id="xp-player-count"></span>) do you think said yes?</label>
-      <div class="stepper-row">
-        <button id="btn-xp-dec" class="btn-secondary stepper-btn">−</button>
-        <span id="xp-prediction-value" class="stepper-value">0</span>
-        <button id="btn-xp-inc" class="btn-secondary stepper-btn">+</button>
+      <label id="xp-prediction-label" class="field-label">How many players (out of <span id="xp-player-count"></span>) do you think said yes?</label>
+      <div class="stepper-row" role="group" aria-labelledby="xp-prediction-label">
+        <button id="btn-xp-dec" class="btn-secondary stepper-btn" aria-label="Decrease prediction">−</button>
+        <span id="xp-prediction-value" class="stepper-value" aria-live="polite">0</span>
+        <button id="btn-xp-inc" class="btn-secondary stepper-btn" aria-label="Increase prediction">+</button>
       </div>
       <button id="btn-xp-submit" class="btn-primary" disabled>Submit</button>
       <p id="xp-answer-status" class="hint"></p>
