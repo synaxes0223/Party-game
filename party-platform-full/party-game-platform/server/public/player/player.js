@@ -621,6 +621,12 @@ socket.on("game:your-missions", ({ missions }) => {
 
 function renderSmAccuseOptions() {
   const playerSelect = document.getElementById("sm-accuse-player");
+  const missionSelect = document.getElementById("sm-accuse-mission");
+  // Preserve the player's current picks across rebuilds (the board is
+  // re-sent whenever any mission changes status).
+  const prevPlayer = playerSelect.value;
+  const prevMission = missionSelect.value;
+
   playerSelect.innerHTML = "";
   currentPlayers
     .filter((p) => p.id !== myId)
@@ -631,7 +637,6 @@ function renderSmAccuseOptions() {
       playerSelect.appendChild(opt);
     });
 
-  const missionSelect = document.getElementById("sm-accuse-mission");
   missionSelect.innerHTML = "";
   smLatestBoard
     .filter((m) => m.status !== "busted")
@@ -641,6 +646,15 @@ function renderSmAccuseOptions() {
       opt.textContent = m.text;
       missionSelect.appendChild(opt);
     });
+
+  restoreSelectValue(playerSelect, prevPlayer);
+  restoreSelectValue(missionSelect, prevMission);
+}
+
+function restoreSelectValue(select, value) {
+  if (!value) return;
+  const exists = Array.from(select.options).some((o) => o.value === value);
+  if (exists) select.value = value;
 }
 
 socket.on("game:mission-board", ({ missions, accusationsLeft }) => {
