@@ -130,6 +130,7 @@
     <section id="screen-wwt-answering" class="screen">
       <h1>✍️ Answer this</h1>
       <p id="wwt-prompt-text" class="prompt-text"></p>
+      <label for="wwt-answer-input" class="visually-hidden">Your anonymous answer</label>
       <input id="wwt-answer-input" class="input-field" placeholder="Your anonymous answer…" maxlength="140" />
       <button id="btn-submit-answer" class="btn-primary">Submit Answer</button>
       <p id="wwt-answer-status" class="hint"></p>
@@ -277,6 +278,7 @@
   <div id="wwt-submit-widget" class="wwt-submit-widget" style="display:none;">
     <button id="btn-toggle-submit-prompt" class="btn-secondary">✍️ Submit a prompt</button>
     <div id="wwt-submit-panel" class="wwt-submit-panel" style="display:none;">
+      <label for="wwt-submit-input" class="visually-hidden">Your secret prompt idea</label>
       <input id="wwt-submit-input" class="input-field" placeholder="Your secret prompt idea…" maxlength="200" />
       <button id="btn-submit-prompt" class="btn-primary">Send</button>
       <p id="wwt-submit-status" class="hint"></p>
@@ -287,9 +289,10 @@
   <div id="wheel-submit-panel" class="wheel-panel hidden">
     <div class="wheel-panel-header">
       <h2>Suggest a Punishment</h2>
-      <button id="btn-wheel-submit-close" class="wheel-close-btn">×</button>
+      <button id="btn-wheel-submit-close" class="wheel-close-btn" aria-label="Close">×</button>
     </div>
     <div class="wheel-add-row">
+      <label for="wheel-submit-input" class="visually-hidden">Your punishment idea</label>
       <input id="wheel-submit-input" type="text" placeholder="Your punishment idea..." />
       <button id="btn-wheel-submit" class="btn-primary">Submit</button>
     </div>
